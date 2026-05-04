@@ -65,6 +65,7 @@ Client -> API -> Reader -> Broker -> Classifier Worker -> DB -> Label Worker -> 
 ### 5.4 Storage
 - PostgreSQL
 - Stores email metadata and classification results
+- Uses SQL migrations for schema management
 
 ### 5.5 Workers (future)
 - Classifier worker
@@ -140,6 +141,11 @@ Reason:
 ### Decision: Start with single process API foundation
 Reason:
 - Establish runnable baseline before storage and scan logic
+
+### Decision: SQL-first storage in MVP
+Reason:
+- Keep persistence explicit and simple
+- Enforce idempotency at DB level with unique constraint
 
 ---
 

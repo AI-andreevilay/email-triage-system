@@ -2,12 +2,14 @@
 
 Backend pet project for automatic Gmail email triage and labeling.
 
-## Current Scope (Iteration 1)
+## Current Scope (Iteration 2)
 
 - Project skeleton for API/workers/migrator
 - PostgreSQL in Docker Compose
 - Environment-based config loading
 - Healthcheck endpoint
+- SQL migrations
+- Minimal PostgreSQL storage layer
 
 ## Tech Stack
 
@@ -21,11 +23,15 @@ Backend pet project for automatic Gmail email triage and labeling.
    ```bash
    docker compose -f deployments/docker-compose.yml up -d postgres
    ```
-2. Run API server:
+2. Apply migrations:
+   ```bash
+   go run ./cmd/migrator
+   ```
+3. Run API server:
    ```bash
    go run ./cmd/api-server
    ```
-3. Check health:
+4. Check health:
    ```bash
    curl http://localhost:8080/healthz
    ```
