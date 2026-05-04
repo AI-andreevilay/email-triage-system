@@ -2,7 +2,7 @@
 
 Backend pet project for automatic Gmail email triage and labeling.
 
-## Current Scope (Iteration 2)
+## Current Scope (Iteration 3)
 
 - Project skeleton for API/workers/migrator
 - PostgreSQL in Docker Compose
@@ -10,6 +10,7 @@ Backend pet project for automatic Gmail email triage and labeling.
 - Healthcheck endpoint
 - SQL migrations
 - Minimal PostgreSQL storage layer
+- Mock Gmail reader
 
 ## Tech Stack
 

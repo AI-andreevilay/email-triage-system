@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/bzelijah/email-triage-system/internal/models"
+	"github.com/bzelijah/email-triage-system/internal/storage/models"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 

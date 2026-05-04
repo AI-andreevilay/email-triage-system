@@ -3,7 +3,7 @@ package storage
 import (
 	"context"
 
-	"github.com/bzelijah/email-triage-system/internal/models"
+	"github.com/bzelijah/email-triage-system/internal/storage/models"
 )
 
 func (p *Postgres) ListEnabledUserRules(ctx context.Context, userID string) ([]models.UserRule, error) {

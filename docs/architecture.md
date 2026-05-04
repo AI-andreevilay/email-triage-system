@@ -147,6 +147,10 @@ Reason:
 - Keep persistence explicit and simple
 - Enforce idempotency at DB level with unique constraint
 
+### Decision: Mock Gmail reader before real integration
+Reason:
+- Validate pipeline incrementally without OAuth and external API dependencies
+
 ---
 
 ## 11. Open Questions
