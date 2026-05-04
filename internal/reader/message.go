@@ -1,4 +1,4 @@
-package gmail
+package reader
 
 type Message struct {
 	ID          string

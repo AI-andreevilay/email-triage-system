@@ -31,7 +31,7 @@ Current phase focuses on a minimal backend foundation for incremental delivery.
 Main components:
 
 - API Server
-- Gmail Reader (mock for MVP)
+- Email Reader (mock for MVP)
 - Classifier
 - Storage (PostgreSQL)
 - (Later) Broker (Redpanda)
@@ -54,7 +54,7 @@ Client -> API -> Reader -> Broker -> Classifier Worker -> DB -> Label Worker -> 
 - Starts scan process
 - Returns scan results
 
-### 5.2 Gmail Reader
+### 5.2 Email Reader
 - Fetches emails (mock for MVP)
 - Normalizes data
 
@@ -147,7 +147,7 @@ Reason:
 - Keep persistence explicit and simple
 - Enforce idempotency at DB level with unique constraint
 
-### Decision: Mock Gmail reader before real integration
+### Decision: Mock email reader before real integration
 Reason:
 - Validate pipeline incrementally without OAuth and external API dependencies
 
