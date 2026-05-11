@@ -9,14 +9,31 @@ import (
 	"time"
 
 	"github.com/bzelijah/email-triage-system/internal/api"
+	"github.com/bzelijah/email-triage-system/internal/classifier"
 	"github.com/bzelijah/email-triage-system/internal/config"
+	"github.com/bzelijah/email-triage-system/internal/reader"
+	"github.com/bzelijah/email-triage-system/internal/storage"
 )
 
 func main() {
 	cfg := config.Load()
+
+	pg, err := storage.NewPostgres(context.Background(), cfg.PostgresURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer pg.Close()
+
+	mockReader := reader.NewMockReader()
+	messageClassifier := classifier.New()
+	router, err := api.NewRouter(pg, mockReader, messageClassifier)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	server := &http.Server{
 		Addr:              ":" + cfg.HTTPPort,
-		Handler:           api.NewRouter(),
+		Handler:           router,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

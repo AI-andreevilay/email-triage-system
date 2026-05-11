@@ -2,7 +2,7 @@
 
 Backend pet project for automatic Gmail email triage and labeling.
 
-## Current Scope (Iteration 4)
+## Current Scope (Iteration 5)
 
 - Project skeleton for API/workers/migrator
 - PostgreSQL in Docker Compose
@@ -19,6 +19,9 @@ Backend pet project for automatic Gmail email triage and labeling.
   - Social
   - Unknown
 - User rules support in classifier (priority + rule type match)
+- Manual full scan endpoint: `POST /scans`
+  - `dry_run` mode
+  - `apply` mode (mock apply)
 
 ## Tech Stack
 
@@ -43,6 +46,12 @@ Backend pet project for automatic Gmail email triage and labeling.
 4. Check health:
    ```bash
    curl http://localhost:8080/healthz
+   ```
+5. Trigger scan:
+   ```bash
+   curl -X POST http://localhost:8080/scans \
+     -H "Content-Type: application/json" \
+     -d '{"mode":"dry_run"}'
    ```
 
 ## Architecture (MVP Direction)
