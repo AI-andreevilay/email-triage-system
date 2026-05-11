@@ -34,7 +34,7 @@ Main components:
 - Email Reader (mock for MVP)
 - Classifier
 - Storage (PostgreSQL)
-- (Later) Broker (Redpanda)
+- (Later) Broker (RabbitMQ)
 - (Later) Workers
 
 Flow (MVP):
@@ -163,7 +163,7 @@ Reason:
 
 ## 12. Future Improvements
 
-- Add Redpanda for async processing
+- Add RabbitMQ for async processing
 - Add Gmail API integration
 - Add Kubernetes deployment
 - Add observability (Prometheus)
