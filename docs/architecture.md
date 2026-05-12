@@ -229,6 +229,12 @@ Reason:
 Reason:
 - First runnable baseline should stay focused on product behavior, not infra complexity
 
+### Decision: Do not introduce dedicated subagent config files in early MVP
+Reason:
+- Current scope is small enough for a single-agent workflow with iterative changes
+- Avoid extra maintenance overhead from agent-role config before complexity justifies it
+- Revisit when changes regularly span multiple modules and require repeatable specialized review roles (for example code-reviewer, migration-reviewer)
+
 ---
 
 ## 11. Deployment Strategy
