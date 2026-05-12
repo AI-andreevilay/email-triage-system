@@ -63,6 +63,7 @@ Client -> API -> Reader -> Broker -> Classifier Worker -> PostgreSQL -> Label Wo
 - Fetches emails from:
   - mock source (default)
   - Gmail API source (optional, OAuth token based)
+- For Gmail source, scan uses paginated fetch in batches (`maxResults` per page)
 - Normalizes data
 
 ### 5.3 Broker (RabbitMQ)
@@ -103,7 +104,7 @@ Client -> API -> Reader -> Broker -> Classifier Worker -> PostgreSQL -> Label Wo
 
 ### 5.6 Workers
 - Classifier worker (current)
-- Label applier worker (current, mock apply)
+- Label applier worker (current, Gmail API apply)
 
 ---
 
@@ -149,17 +150,18 @@ Client -> API -> Reader -> Broker -> Classifier Worker -> PostgreSQL -> Label Wo
 
 ## 7. Data Flow
 
-Current (Iteration 9 - Reader):
+Current (Iteration 9):
 
 1. User triggers scan
 2. System fetches emails from configured reader source (mock or Gmail)
-3. API publishes one `email.raw` event per message to RabbitMQ
-4. Classifier worker consumes `email.raw`
-5. Worker classifies using default + user rules
-6. Worker stores metadata and classification result in PostgreSQL
-7. For `apply` mode, classifier worker publishes `email.classified`
-8. Label worker consumes `email.classified`
-9. Label worker performs mock apply and updates `applied_label`, `status=applied`
+3. Gmail source is read page-by-page (batch size default: 100)
+4. API publishes one `email.raw` event per message to RabbitMQ
+5. Classifier worker consumes `email.raw`
+6. Worker classifies using default + user rules
+7. Worker stores metadata and classification result in PostgreSQL
+8. For `apply` mode, classifier worker publishes `email.classified`
+9. Label worker consumes `email.classified`
+10. Label worker applies Gmail label via Gmail API, removes `INBOX`, and updates `applied_label`, `status=applied`
 
 Future (event-driven):
 
@@ -207,6 +209,16 @@ Reason:
 Reason:
 - Validate Gmail OAuth and mailbox read path in dry-run mode first
 - Reduce integration risk by changing one external dependency at a time
+
+### Decision: Apply labels in dedicated label worker through Gmail API
+Reason:
+- Preserve async separation between classification and side effects
+- Keep Gmail API failures isolated from classifier path
+
+### Decision: Use paginated Gmail scan batches by default
+Reason:
+- Supports iterative full Inbox scan without loading everything in memory
+- Keeps API calls and queue publishing bounded per page
 
 ### Decision: Start with single process API foundation
 Reason:
@@ -273,7 +285,7 @@ Reason:
 ### 11.2 Initial MVP deployment
 - First runnable baseline does not require Kubernetes.
 - Prioritize correctness of the current event-driven MVP flow:
-  Client -> API -> Reader -> Broker -> Classifier Worker -> PostgreSQL -> Label Worker (mock apply).
+  Client -> API -> Reader -> Broker -> Classifier Worker -> PostgreSQL -> Label Worker -> Gmail API.
 
 ### 11.3 Future k3s deployment
 - Deploy later to a single-node k3s cluster on one Hetzner VPS.

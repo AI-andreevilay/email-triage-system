@@ -44,15 +44,55 @@ func NewSource(source string, mock *MockReader, gmailClient *gmail.Client, maxRe
 }
 
 func (s *Source) ListMessages(ctx context.Context, userID string) ([]Message, error) {
-	if s.source == SourceMock {
-		return s.mock.ListMessages(ctx, userID)
-	}
-
-	items, err := s.gmail.ListMessages(ctx, s.maxResults, s.query)
+	result := make([]Message, 0)
+	err := s.IterateMessages(ctx, userID, func(batch []Message) error {
+		result = append(result, batch...)
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
+	return result, nil
+}
 
+func (s *Source) IterateMessages(ctx context.Context, userID string, visit func(batch []Message) error) error {
+	if visit == nil {
+		return errors.New("visit callback is required")
+	}
+
+	if s.source == SourceMock {
+		messages, err := s.mock.ListMessages(ctx, userID)
+		if err != nil {
+			return err
+		}
+		if len(messages) == 0 {
+			return nil
+		}
+		return visit(messages)
+	}
+
+	pageToken := ""
+	for {
+		items, nextPageToken, err := s.gmail.ListMessagesPage(ctx, s.maxResults, s.query, pageToken)
+		if err != nil {
+			return err
+		}
+
+		batch := toMessages(items)
+		if len(batch) > 0 {
+			if err := visit(batch); err != nil {
+				return err
+			}
+		}
+
+		if nextPageToken == "" || nextPageToken == pageToken {
+			return nil
+		}
+		pageToken = nextPageToken
+	}
+}
+
+func toMessages(items []gmail.Message) []Message {
 	result := make([]Message, 0, len(items))
 	for _, item := range items {
 		result = append(result, Message{
@@ -63,5 +103,5 @@ func (s *Source) ListMessages(ctx context.Context, userID string) ([]Message, er
 			BodySnippet: item.Snippet,
 		})
 	}
-	return result, nil
+	return result
 }

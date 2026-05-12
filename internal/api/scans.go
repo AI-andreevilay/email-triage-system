@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/bzelijah/email-triage-system/internal/broker"
+	"github.com/bzelijah/email-triage-system/internal/reader"
 	storagemodels "github.com/bzelijah/email-triage-system/internal/storage/models"
 )
 
@@ -59,45 +60,49 @@ func (h *Handler) createScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	failRun := func() {
+	failRun := func(totalFound, totalProcessed, totalFailed int) {
 		_ = h.store.CompleteScanRun(r.Context(), storagemodels.ScanRun{
 			ID:             runID,
 			Status:         "failed",
-			TotalFound:     0,
-			TotalProcessed: 0,
-			TotalFailed:    0,
+			TotalFound:     totalFound,
+			TotalProcessed: totalProcessed,
+			TotalFailed:    totalFailed,
 		})
 	}
 
-	messages, err := h.reader.ListMessages(r.Context(), defaultUserID)
-	if err != nil {
-		failRun()
-		writeJSONError(w, http.StatusInternalServerError, "failed to list messages")
-		return
-	}
-
+	totalFound := 0
 	totalProcessed := 0
 	totalFailed := 0
 
-	for _, message := range messages {
-		err := h.broker.PublishRawEmail(r.Context(), broker.RawEmailEvent{
-			ScanRunID:   runID,
-			UserID:      defaultUserID,
-			Mode:        mode,
-			PublishedAt: time.Now().UTC(),
-			Message: broker.RawEmailMessage{
-				GmailMessageID: message.ID,
-				ThreadID:       message.ThreadID,
-				From:           message.From,
-				Subject:        message.Subject,
-				BodySnippet:    message.BodySnippet,
-			},
-		})
-		if err != nil {
-			totalFailed++
-			continue
+	if err := h.reader.IterateMessages(r.Context(), defaultUserID, func(batch []reader.Message) error {
+		totalFound += len(batch)
+
+		for _, message := range batch {
+			err := h.broker.PublishRawEmail(r.Context(), broker.RawEmailEvent{
+				ScanRunID:   runID,
+				UserID:      defaultUserID,
+				Mode:        mode,
+				PublishedAt: time.Now().UTC(),
+				Message: broker.RawEmailMessage{
+					GmailMessageID: message.ID,
+					ThreadID:       message.ThreadID,
+					From:           message.From,
+					Subject:        message.Subject,
+					BodySnippet:    message.BodySnippet,
+				},
+			})
+			if err != nil {
+				totalFailed++
+				continue
+			}
+			totalProcessed++
 		}
-		totalProcessed++
+
+		return nil
+	}); err != nil {
+		failRun(totalFound, totalProcessed, totalFailed)
+		writeJSONError(w, http.StatusInternalServerError, "failed to list messages")
+		return
 	}
 
 	runStatus := "queued"
@@ -108,7 +113,7 @@ func (h *Handler) createScan(w http.ResponseWriter, r *http.Request) {
 	if err := h.store.CompleteScanRun(r.Context(), storagemodels.ScanRun{
 		ID:             runID,
 		Status:         runStatus,
-		TotalFound:     len(messages),
+		TotalFound:     totalFound,
 		TotalProcessed: totalProcessed,
 		TotalFailed:    totalFailed,
 	}); err != nil {
@@ -121,7 +126,7 @@ func (h *Handler) createScan(w http.ResponseWriter, r *http.Request) {
 		UserID:         defaultUserID,
 		Mode:           mode,
 		Status:         runStatus,
-		TotalFound:     len(messages),
+		TotalFound:     totalFound,
 		TotalProcessed: totalProcessed,
 		TotalFailed:    totalFailed,
 	}

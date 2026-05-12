@@ -28,8 +28,8 @@ func Load() Config {
 	gmailCredentialsFile := getEnv("GMAIL_CREDENTIALS_FILE", "secrets/gmail_credentials.json")
 	gmailTokenFile := getEnv("GMAIL_TOKEN_FILE", "secrets/gmail_token.json")
 	gmailUserID := getEnv("GMAIL_USER_ID", "me")
-	gmailReadMaxResults := getEnvInt64("GMAIL_READ_MAX_RESULTS", 20)
-	gmailReadQuery := getEnv("GMAIL_READ_QUERY", "newer_than:14d -in:trash")
+	gmailReadMaxResults := getEnvInt64("GMAIL_READ_MAX_RESULTS", 100)
+	gmailReadQuery := getEnv("GMAIL_READ_QUERY", "in:inbox -in:trash")
 	return Config{
 		HTTPPort:             port,
 		PostgresURL:          postgresURL,

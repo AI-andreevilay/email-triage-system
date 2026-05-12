@@ -9,21 +9,24 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 
 	"github.com/bzelijah/email-triage-system/internal/broker"
+	"github.com/bzelijah/email-triage-system/internal/gmail"
 	"github.com/bzelijah/email-triage-system/internal/storage"
 )
 
 type LabelWorker struct {
-	store  *storage.Postgres
-	broker *broker.RabbitMQ
+	store       *storage.Postgres
+	broker      *broker.RabbitMQ
+	gmailClient *gmail.Client
 }
 
-func NewLabelWorker(store *storage.Postgres, messageBroker *broker.RabbitMQ) (*LabelWorker, error) {
-	if store == nil || messageBroker == nil {
+func NewLabelWorker(store *storage.Postgres, messageBroker *broker.RabbitMQ, gmailClient *gmail.Client) (*LabelWorker, error) {
+	if store == nil || messageBroker == nil || gmailClient == nil {
 		return nil, errors.New("label worker dependencies are not configured")
 	}
 	return &LabelWorker{
-		store:  store,
-		broker: messageBroker,
+		store:       store,
+		broker:      messageBroker,
+		gmailClient: gmailClient,
 	}, nil
 }
 
@@ -74,11 +77,22 @@ func (w *LabelWorker) processClassifiedEmail(ctx context.Context, body []byte) e
 		return nil
 	}
 
-	if err := mockApplyLabel(event); err != nil {
+	labelID, err := w.gmailClient.EnsureLabel(ctx, event.Classification.PredictedLabel)
+	if err != nil {
+		if gmail.IsPermanentError(err) {
+			return errDropDelivery
+		}
 		return err
 	}
 
-	err := w.store.MarkEmailLabelApplied(
+	if err := w.gmailClient.ApplyLabelToMessage(ctx, event.Classification.GmailMessageID, labelID); err != nil {
+		if gmail.IsPermanentError(err) {
+			return errDropDelivery
+		}
+		return err
+	}
+
+	err = w.store.MarkEmailLabelApplied(
 		ctx,
 		event.UserID,
 		event.Classification.GmailMessageID,
@@ -91,9 +105,5 @@ func (w *LabelWorker) processClassifiedEmail(ctx context.Context, body []byte) e
 		return err
 	}
 
-	return nil
-}
-
-func mockApplyLabel(_ broker.ClassifiedEmailEvent) error {
 	return nil
 }

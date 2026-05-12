@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os/signal"
 	"syscall"
@@ -9,6 +10,7 @@ import (
 	"github.com/bzelijah/email-triage-system/internal/broker"
 	"github.com/bzelijah/email-triage-system/internal/config"
 	"github.com/bzelijah/email-triage-system/internal/consumer"
+	"github.com/bzelijah/email-triage-system/internal/gmail"
 	"github.com/bzelijah/email-triage-system/internal/storage"
 )
 
@@ -27,7 +29,17 @@ func main() {
 	}
 	defer mq.Close()
 
-	worker, err := consumer.NewLabelWorker(pg, mq)
+	gmailClient, err := gmail.NewClient(
+		context.Background(),
+		cfg.GmailCredentialsFile,
+		cfg.GmailTokenFile,
+		cfg.GmailUserID,
+	)
+	if err != nil {
+		log.Fatal(fmt.Errorf("init gmail client: %w", err))
+	}
+
+	worker, err := consumer.NewLabelWorker(pg, mq, gmailClient)
 	if err != nil {
 		log.Fatal(err)
 	}
