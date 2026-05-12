@@ -37,14 +37,14 @@ Main components:
 
 - API Server
 - Email Reader (mock for MVP)
-- Classifier
+- Broker (RabbitMQ)
 - Storage (PostgreSQL)
-- (Later) Broker (RabbitMQ)
+- Classifier
 - (Later) Workers
 
 Flow (MVP):
 
-Client -> API -> Reader -> Classifier -> PostgreSQL
+Client -> API -> Reader -> Broker (email.raw)
 
 Future flow:
 
@@ -57,13 +57,18 @@ Client -> API -> Reader -> Broker -> Classifier Worker -> PostgreSQL -> Label Wo
 ### 5.1 API Server
 - Handles HTTP requests
 - Starts scan process
-- Returns scan results
+- Publishes `email.raw` events to broker
 
 ### 5.2 Email Reader
 - Fetches emails (mock for MVP)
 - Normalizes data
 
-### 5.3 Classifier
+### 5.3 Broker (RabbitMQ)
+- Receives raw email events from API
+- Topic exchange: `email.events`
+- Routing key and queue for current iteration: `email.raw`
+
+### 5.4 Classifier
 - Explainable rule-based classification (MVP)
 - Categories: Job, Transactions, Security, Promo, Social, Unknown
 - Both default rules and user-defined rules are evaluated for each message
@@ -88,12 +93,12 @@ Client -> API -> Reader -> Broker -> Classifier Worker -> PostgreSQL -> Label Wo
 - Each classification stores a short reason for dry-run review and debugging
 - Body keywords can be checked in memory during classification, but body content is never persisted
 
-### 5.4 Storage
+### 5.5 Storage
 - PostgreSQL
 - Stores email metadata and classification results
 - Uses SQL migrations for schema management
 
-### 5.5 Workers (future)
+### 5.6 Workers (future)
 - Classifier worker
 - Label applier worker
 
@@ -141,13 +146,12 @@ Client -> API -> Reader -> Broker -> Classifier Worker -> PostgreSQL -> Label Wo
 
 ## 7. Data Flow
 
-MVP:
+Current (Iteration 6):
 
 1. User triggers scan
 2. System fetches emails from reader
-3. Emails are classified by rules (default + user rules with priority)
-4. Results are stored in PostgreSQL
-5. Labels are applied (only in apply mode)
+3. API publishes one `email.raw` event per message to RabbitMQ
+4. `scan_runs` is updated with queued totals
 
 Future (event-driven):
 
@@ -176,10 +180,10 @@ Future (event-driven):
 
 ## 10. Key Decisions
 
-### Decision: No broker in MVP
+### Decision: Introduce RabbitMQ before workers
 Reason:
-- Reduce complexity
-- Focus on core logic first
+- Move from synchronous scan flow to event flow incrementally
+- Keep classifier and label applying in dedicated worker iterations
 
 ### Decision: Start with single process API foundation
 Reason:

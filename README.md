@@ -2,7 +2,7 @@
 
 Backend pet project for automatic Gmail email triage and labeling.
 
-## Current Scope (Iteration 5)
+## Current Scope (Iteration 6)
 
 - Project skeleton for API/workers/migrator
 - PostgreSQL in Docker Compose
@@ -20,13 +20,14 @@ Backend pet project for automatic Gmail email triage and labeling.
   - Unknown
 - User rules support in classifier (`rule_type` + `operator` + priority-based scoring)
 - Manual full scan endpoint: `POST /scans`
-  - `dry_run` mode
-  - `apply` mode (mock apply)
+  - Publishes raw email events to RabbitMQ queue `email.raw`
+- RabbitMQ in local Docker Compose
 
 ## Tech Stack
 
 - Go
 - PostgreSQL
+- RabbitMQ
 - Docker Compose
 
 ## Run Locally
@@ -97,8 +98,8 @@ curl -X POST http://localhost:8080/scans \
   -d '{"mode":"dry_run"}'
 ```
 
-## Architecture (MVP Direction)
+## Architecture (Current)
 
-Client -> API -> Reader -> Classifier -> DB
+Client -> API -> Reader -> RabbitMQ (`email.raw`)
 
 Detailed notes: `docs/architecture.md`.

@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/bzelijah/email-triage-system/internal/api"
-	"github.com/bzelijah/email-triage-system/internal/classifier"
+	"github.com/bzelijah/email-triage-system/internal/broker"
 	"github.com/bzelijah/email-triage-system/internal/config"
 	"github.com/bzelijah/email-triage-system/internal/reader"
 	"github.com/bzelijah/email-triage-system/internal/storage"
@@ -24,9 +24,14 @@ func main() {
 	}
 	defer pg.Close()
 
+	mq, err := broker.NewRabbitMQ(cfg.RabbitMQURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer mq.Close()
+
 	mockReader := reader.NewMockReader()
-	messageClassifier := classifier.New()
-	router, err := api.NewRouter(pg, mockReader, messageClassifier)
+	router, err := api.NewRouter(pg, mockReader, mq)
 	if err != nil {
 		log.Fatal(err)
 	}

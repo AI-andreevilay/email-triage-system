@@ -5,26 +5,26 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/bzelijah/email-triage-system/internal/classifier"
+	"github.com/bzelijah/email-triage-system/internal/broker"
 	"github.com/bzelijah/email-triage-system/internal/reader"
 	"github.com/bzelijah/email-triage-system/internal/storage"
 )
 
 type Handler struct {
-	store      *storage.Postgres
-	reader     *reader.MockReader
-	classifier *classifier.Classifier
+	store  *storage.Postgres
+	reader *reader.MockReader
+	broker *broker.RabbitMQ
 }
 
-func NewRouter(store *storage.Postgres, mockReader *reader.MockReader, messageClassifier *classifier.Classifier) (http.Handler, error) {
-	if store == nil || mockReader == nil || messageClassifier == nil {
+func NewRouter(store *storage.Postgres, mockReader *reader.MockReader, messageBroker *broker.RabbitMQ) (http.Handler, error) {
+	if store == nil || mockReader == nil || messageBroker == nil {
 		return nil, errors.New("api dependencies are not configured")
 	}
 
 	h := &Handler{
-		store:      store,
-		reader:     mockReader,
-		classifier: messageClassifier,
+		store:  store,
+		reader: mockReader,
+		broker: messageBroker,
 	}
 
 	mux := http.NewServeMux()

@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 
 COMPOSE_FILE := deployments/docker-compose.yml
-PG_SERVICE := postgres
+INFRA_SERVICES := postgres rabbitmq
 
 .DEFAULT_GOAL := help
 
@@ -10,8 +10,8 @@ install: ## install local Go dependencies
 	go mod download
 
 .PHONY: run-infra
-run-infra: ## start local infrastructure (PostgreSQL)
-	docker compose -f $(COMPOSE_FILE) up -d $(PG_SERVICE)
+run-infra: ## start local infrastructure (PostgreSQL + RabbitMQ)
+	docker compose -f $(COMPOSE_FILE) up -d $(INFRA_SERVICES)
 
 .PHONY: stop-infra
 stop-infra: ## stop local infrastructure

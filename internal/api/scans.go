@@ -7,8 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/bzelijah/email-triage-system/internal/rules"
-	"github.com/bzelijah/email-triage-system/internal/storage"
+	"github.com/bzelijah/email-triage-system/internal/broker"
 	storagemodels "github.com/bzelijah/email-triage-system/internal/storage/models"
 )
 
@@ -23,14 +22,13 @@ type createScanRequest struct {
 }
 
 type createScanResponse struct {
-	RunID            int64  `json:"run_id"`
-	UserID           string `json:"user_id"`
-	Mode             string `json:"mode"`
-	Status           string `json:"status"`
-	TotalFound       int    `json:"total_found"`
-	TotalProcessed   int    `json:"total_processed"`
-	TotalFailed      int    `json:"total_failed"`
-	AlreadyProcessed int    `json:"already_processed"`
+	RunID          int64  `json:"run_id"`
+	UserID         string `json:"user_id"`
+	Mode           string `json:"mode"`
+	Status         string `json:"status"`
+	TotalFound     int    `json:"total_found"`
+	TotalProcessed int    `json:"total_processed"`
+	TotalFailed    int    `json:"total_failed"`
 }
 
 func (h *Handler) createScan(w http.ResponseWriter, r *http.Request) {
@@ -78,57 +76,33 @@ func (h *Handler) createScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userRules, err := h.store.ListEnabledUserRules(r.Context(), defaultUserID)
-	if err != nil {
-		failRun()
-		writeJSONError(w, http.StatusInternalServerError, "failed to load user rules")
-		return
-	}
-	classificationRules := toClassificationRules(userRules)
-
 	totalProcessed := 0
 	totalFailed := 0
-	alreadyProcessed := 0
 
 	for _, message := range messages {
-		classification := h.classifier.Classify(message, classificationRules)
-
-		var appliedLabel *string
-		messageStatus := "classified"
-		if mode == scanModeDryRun {
-			messageStatus = "dry_run"
-		}
-		if mode == scanModeApply {
-			applied := classification.Label
-			appliedLabel = &applied
-			messageStatus = "applied"
-		}
-
-		now := time.Now().UTC()
-		err := h.store.InsertEmailMessage(r.Context(), storagemodels.EmailMessage{
-			UserID:         defaultUserID,
-			GmailMessageID: message.ID,
-			PredictedLabel: classification.Label,
-			AppliedLabel:   appliedLabel,
-			Confidence:     classification.Confidence,
-			Reason:         classification.Reason,
-			Status:         messageStatus,
-			ProcessedAt:    &now,
+		err := h.broker.PublishRawEmail(r.Context(), broker.RawEmailEvent{
+			ScanRunID:   runID,
+			UserID:      defaultUserID,
+			Mode:        mode,
+			PublishedAt: time.Now().UTC(),
+			Message: broker.RawEmailMessage{
+				GmailMessageID: message.ID,
+				ThreadID:       message.ThreadID,
+				From:           message.From,
+				Subject:        message.Subject,
+				BodySnippet:    message.BodySnippet,
+			},
 		})
 		if err != nil {
-			if errors.Is(err, storage.ErrAlreadyProcessed) {
-				alreadyProcessed++
-				continue
-			}
 			totalFailed++
 			continue
 		}
 		totalProcessed++
 	}
 
-	runStatus := "completed"
+	runStatus := "queued"
 	if totalFailed > 0 {
-		runStatus = "completed_with_errors"
+		runStatus = "queued_with_errors"
 	}
 
 	if err := h.store.CompleteScanRun(r.Context(), storagemodels.ScanRun{
@@ -143,31 +117,15 @@ func (h *Handler) createScan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := createScanResponse{
-		RunID:            runID,
-		UserID:           defaultUserID,
-		Mode:             mode,
-		Status:           runStatus,
-		TotalFound:       len(messages),
-		TotalProcessed:   totalProcessed,
-		TotalFailed:      totalFailed,
-		AlreadyProcessed: alreadyProcessed,
+		RunID:          runID,
+		UserID:         defaultUserID,
+		Mode:           mode,
+		Status:         runStatus,
+		TotalFound:     len(messages),
+		TotalProcessed: totalProcessed,
+		TotalFailed:    totalFailed,
 	}
 	writeJSON(w, http.StatusCreated, response)
-}
-
-func toClassificationRules(in []storagemodels.UserRule) []rules.Rule {
-	result := make([]rules.Rule, 0, len(in))
-	for _, rule := range in {
-		result = append(result, rules.Rule{
-			RuleType:    rule.RuleType,
-			Operator:    rule.Operator,
-			RuleValue:   rule.RuleValue,
-			TargetLabel: rule.TargetLabel,
-			Enabled:     rule.Enabled,
-			Priority:    rule.Priority,
-		})
-	}
-	return result
 }
 
 func writeJSON(w http.ResponseWriter, statusCode int, payload any) {
