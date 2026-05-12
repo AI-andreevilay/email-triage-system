@@ -32,3 +32,29 @@ func (p *Postgres) InsertEmailMessage(ctx context.Context, message models.EmailM
 	}
 	return nil
 }
+
+func (p *Postgres) MarkEmailLabelApplied(ctx context.Context, userID, gmailMessageID, appliedLabel string) error {
+	result, err := p.db.ExecContext(
+		ctx,
+		`UPDATE email_messages
+		 SET applied_label = $1, status = $2, processed_at = NOW()
+		 WHERE user_id = $3 AND gmail_message_id = $4`,
+		appliedLabel,
+		"applied",
+		userID,
+		gmailMessageID,
+	)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrEmailMessageNotFound
+	}
+
+	return nil
+}

@@ -43,6 +43,19 @@ func NewRabbitMQ(url string) (*RabbitMQ, error) {
 		return nil, err
 	}
 
+	_, err = ch.QueueDeclare(EmailClassifiedQueue, true, false, false, false, nil)
+	if err != nil {
+		_ = ch.Close()
+		_ = conn.Close()
+		return nil, err
+	}
+
+	if err := ch.QueueBind(EmailClassifiedQueue, EmailClassifiedKey, EmailEventsExchange, false, nil); err != nil {
+		_ = ch.Close()
+		_ = conn.Close()
+		return nil, err
+	}
+
 	return &RabbitMQ{
 		conn: conn,
 		ch:   ch,
@@ -78,6 +91,43 @@ func (r *RabbitMQ) ConsumeRawEmails(ctx context.Context) (<-chan amqp.Delivery, 
 		ctx,
 		EmailRawQueue,
 		"classifier-worker",
+		false,
+		false,
+		false,
+		false,
+		nil,
+	)
+}
+
+func (r *RabbitMQ) PublishClassifiedEmail(ctx context.Context, event ClassifiedEmailEvent) error {
+	body, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+
+	return r.ch.PublishWithContext(
+		ctx,
+		EmailEventsExchange,
+		EmailClassifiedKey,
+		false,
+		false,
+		amqp.Publishing{
+			ContentType:  "application/json",
+			DeliveryMode: amqp.Persistent,
+			Body:         body,
+		},
+	)
+}
+
+func (r *RabbitMQ) ConsumeClassifiedEmails(ctx context.Context) (<-chan amqp.Delivery, error) {
+	if err := r.ch.Qos(10, 0, false); err != nil {
+		return nil, err
+	}
+
+	return r.ch.ConsumeWithContext(
+		ctx,
+		EmailClassifiedQueue,
+		"label-worker",
 		false,
 		false,
 		false,

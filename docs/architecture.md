@@ -40,11 +40,11 @@ Main components:
 - Broker (RabbitMQ)
 - Storage (PostgreSQL)
 - Classifier
-- (Later) Workers
+- Workers
 
 Flow (MVP):
 
-Client -> API -> Reader -> Broker (email.raw) -> Classifier Worker -> PostgreSQL
+Client -> API -> Reader -> Broker (email.raw) -> Classifier Worker -> PostgreSQL -> Broker (email.classified) -> Label Worker -> PostgreSQL
 
 Future flow:
 
@@ -66,7 +66,8 @@ Client -> API -> Reader -> Broker -> Classifier Worker -> PostgreSQL -> Label Wo
 ### 5.3 Broker (RabbitMQ)
 - Receives raw email events from API
 - Topic exchange: `email.events`
-- Routing key and queue for current iteration: `email.raw`
+- Routing key and queue: `email.raw`
+- Routing key and queue: `email.classified`
 
 ### 5.4 Classifier
 - Explainable rule-based classification (MVP)
@@ -100,7 +101,7 @@ Client -> API -> Reader -> Broker -> Classifier Worker -> PostgreSQL -> Label Wo
 
 ### 5.6 Workers
 - Classifier worker (current)
-- Label applier worker (future)
+- Label applier worker (current, mock apply)
 
 ---
 
@@ -146,7 +147,7 @@ Client -> API -> Reader -> Broker -> Classifier Worker -> PostgreSQL -> Label Wo
 
 ## 7. Data Flow
 
-Current (Iteration 7):
+Current (Iteration 8):
 
 1. User triggers scan
 2. System fetches emails from reader
@@ -154,6 +155,9 @@ Current (Iteration 7):
 4. Classifier worker consumes `email.raw`
 5. Worker classifies using default + user rules
 6. Worker stores metadata and classification result in PostgreSQL
+7. For `apply` mode, classifier worker publishes `email.classified`
+8. Label worker consumes `email.classified`
+9. Label worker performs mock apply and updates `applied_label`, `status=applied`
 
 Future (event-driven):
 
@@ -191,6 +195,11 @@ Reason:
 Reason:
 - Keep API focused on request orchestration and event publishing
 - Centralize idempotent write path in one consumer
+
+### Decision: Keep label applying mocked in Iteration 8
+Reason:
+- Introduce label stage and event contract before Gmail OAuth/API complexity
+- Validate end-to-end apply flow with DB updates only
 
 ### Decision: Start with single process API foundation
 Reason:
@@ -256,8 +265,8 @@ Reason:
 
 ### 11.2 Initial MVP deployment
 - First runnable baseline does not require Kubernetes.
-- Prioritize correctness of the synchronous MVP flow:
-  Client -> API -> Reader -> Classifier -> PostgreSQL.
+- Prioritize correctness of the current event-driven MVP flow:
+  Client -> API -> Reader -> Broker -> Classifier Worker -> PostgreSQL -> Label Worker (mock apply).
 
 ### 11.3 Future k3s deployment
 - Deploy later to a single-node k3s cluster on one Hetzner VPS.

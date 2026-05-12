@@ -115,6 +115,22 @@ func (w *ClassifierWorker) processRawEmail(ctx context.Context, body []byte) err
 		return err
 	}
 
+	if event.Mode == "apply" {
+		if err := w.broker.PublishClassifiedEmail(ctx, broker.ClassifiedEmailEvent{
+			ScanRunID:    event.ScanRunID,
+			UserID:       event.UserID,
+			Mode:         event.Mode,
+			ClassifiedAt: time.Now().UTC(),
+			Classification: broker.ClassifiedEmailMessage{
+				GmailMessageID: event.Message.GmailMessageID,
+				PredictedLabel: result.Label,
+				Confidence:     result.Confidence,
+			},
+		}); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
