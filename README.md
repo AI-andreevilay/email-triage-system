@@ -31,28 +31,40 @@ Backend pet project for automatic Gmail email triage and labeling.
 
 ## Run Locally
 
-1. Start PostgreSQL:
+1. Show available commands:
    ```bash
-   docker compose -f deployments/docker-compose.yml up -d postgres
+   make help
    ```
-2. Apply migrations:
+2. Install local dependencies:
    ```bash
-   go run ./cmd/migrator
+   make install
    ```
-3. Run API server:
+3. Start PostgreSQL:
    ```bash
-   go run ./cmd/api-server
+   make run-infra
    ```
-4. Check health:
+4. Apply migrations:
    ```bash
-   curl http://localhost:8080/healthz
+   make migrate
    ```
-5. Trigger scan:
+5. Run API server:
    ```bash
-   curl -X POST http://localhost:8080/scans \
-     -H "Content-Type: application/json" \
-     -d '{"mode":"dry_run"}'
+   make run-api
    ```
+6. Check health:
+   ```bash
+   make healthz
+   ```
+7. Trigger scan:
+   ```bash
+   make scan-dry-run
+   ```
+
+One-command flow:
+
+```bash
+make run
+```
 
 ## User Rules (MVP)
 
