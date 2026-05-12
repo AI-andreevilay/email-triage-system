@@ -69,6 +69,23 @@ func (r *RabbitMQ) PublishRawEmail(ctx context.Context, event RawEmailEvent) err
 	)
 }
 
+func (r *RabbitMQ) ConsumeRawEmails(ctx context.Context) (<-chan amqp.Delivery, error) {
+	if err := r.ch.Qos(10, 0, false); err != nil {
+		return nil, err
+	}
+
+	return r.ch.ConsumeWithContext(
+		ctx,
+		EmailRawQueue,
+		"classifier-worker",
+		false,
+		false,
+		false,
+		false,
+		nil,
+	)
+}
+
 func (r *RabbitMQ) Close() error {
 	if r == nil {
 		return nil
@@ -77,7 +94,7 @@ func (r *RabbitMQ) Close() error {
 	var firstErr error
 
 	if r.ch != nil {
-		if err := r.ch.Close(); err != nil && firstErr == nil {
+		if err := r.ch.Close(); err != nil {
 			firstErr = err
 		}
 	}

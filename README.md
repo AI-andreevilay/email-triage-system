@@ -2,7 +2,7 @@
 
 Backend pet project for automatic Gmail email triage and labeling.
 
-## Current Scope (Iteration 6)
+## Current Scope (Iteration 7)
 
 - Project skeleton for API/workers/migrator
 - PostgreSQL in Docker Compose
@@ -22,6 +22,7 @@ Backend pet project for automatic Gmail email triage and labeling.
 - Manual full scan endpoint: `POST /scans`
   - Publishes raw email events to RabbitMQ queue `email.raw`
 - RabbitMQ in local Docker Compose
+- Classifier worker consumes `email.raw`, classifies emails, and stores metadata in PostgreSQL
 
 ## Tech Stack
 
@@ -100,6 +101,6 @@ curl -X POST http://localhost:8080/scans \
 
 ## Architecture (Current)
 
-Client -> API -> Reader -> RabbitMQ (`email.raw`)
+Client -> API -> Reader -> RabbitMQ (`email.raw`) -> Classifier Worker -> PostgreSQL
 
 Detailed notes: `docs/architecture.md`.

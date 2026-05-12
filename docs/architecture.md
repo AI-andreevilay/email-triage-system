@@ -44,7 +44,7 @@ Main components:
 
 Flow (MVP):
 
-Client -> API -> Reader -> Broker (email.raw)
+Client -> API -> Reader -> Broker (email.raw) -> Classifier Worker -> PostgreSQL
 
 Future flow:
 
@@ -98,9 +98,9 @@ Client -> API -> Reader -> Broker -> Classifier Worker -> PostgreSQL -> Label Wo
 - Stores email metadata and classification results
 - Uses SQL migrations for schema management
 
-### 5.6 Workers (future)
-- Classifier worker
-- Label applier worker
+### 5.6 Workers
+- Classifier worker (current)
+- Label applier worker (future)
 
 ---
 
@@ -146,12 +146,14 @@ Client -> API -> Reader -> Broker -> Classifier Worker -> PostgreSQL -> Label Wo
 
 ## 7. Data Flow
 
-Current (Iteration 6):
+Current (Iteration 7):
 
 1. User triggers scan
 2. System fetches emails from reader
 3. API publishes one `email.raw` event per message to RabbitMQ
-4. `scan_runs` is updated with queued totals
+4. Classifier worker consumes `email.raw`
+5. Worker classifies using default + user rules
+6. Worker stores metadata and classification result in PostgreSQL
 
 Future (event-driven):
 
@@ -184,6 +186,11 @@ Future (event-driven):
 Reason:
 - Move from synchronous scan flow to event flow incrementally
 - Keep classifier and label applying in dedicated worker iterations
+
+### Decision: Persist classification in classifier worker
+Reason:
+- Keep API focused on request orchestration and event publishing
+- Centralize idempotent write path in one consumer
 
 ### Decision: Start with single process API foundation
 Reason:
