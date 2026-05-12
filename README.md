@@ -2,7 +2,7 @@
 
 Backend pet project for automatic Gmail email triage and labeling.
 
-## Current Scope (Iteration 8)
+## Current Scope (Iteration 9 - Reader)
 
 - Project skeleton for API/workers/migrator
 - PostgreSQL in Docker Compose
@@ -26,6 +26,8 @@ Backend pet project for automatic Gmail email triage and labeling.
 - Classifier worker publishes `email.classified` for apply mode
 - Label worker consumes `email.classified` and performs mock label apply
 - Label worker updates `applied_label` and `status=applied` in PostgreSQL
+- Real Gmail reader (optional via config) for scan source
+- OAuth CLI command to connect your Gmail account and save token
 
 ## Tech Stack
 
@@ -107,3 +109,35 @@ curl -X POST http://localhost:8080/scans \
 Client -> API -> Reader -> RabbitMQ (`email.raw`) -> Classifier Worker -> PostgreSQL -> RabbitMQ (`email.classified`) -> Label Worker (mock apply) -> PostgreSQL
 
 Detailed notes: `docs/architecture.md`.
+
+## Gmail Connection (for real reader)
+
+1. In Google Cloud Console:
+   - Enable Gmail API
+   - Create OAuth Client ID (`Desktop app`)
+   - Download credentials JSON
+2. Save it as:
+   ```bash
+   secrets/gmail_credentials.json
+   ```
+3. Run OAuth flow:
+   ```bash
+   make gmail-auth
+   ```
+   Command starts local callback on `http://localhost:8090/oauth2/callback`.
+   After Google consent, token is saved automatically.
+4. Start API with Gmail source:
+   ```bash
+   EMAIL_SOURCE=gmail \
+   GMAIL_CREDENTIALS_FILE=secrets/gmail_credentials.json \
+   GMAIL_TOKEN_FILE=secrets/gmail_token.json \
+   GMAIL_READ_MAX_RESULTS=20 \
+   GMAIL_READ_QUERY='newer_than:7d -in:trash' \
+   go run ./cmd/api-server
+   ```
+5. Trigger dry-run scan:
+   ```bash
+   curl -X POST http://localhost:8080/scans \
+     -H "Content-Type: application/json" \
+     -d '{"mode":"dry_run"}'
+   ```

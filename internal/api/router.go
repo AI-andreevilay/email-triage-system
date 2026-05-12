@@ -12,18 +12,18 @@ import (
 
 type Handler struct {
 	store  *storage.Postgres
-	reader *reader.MockReader
+	reader *reader.Source
 	broker *broker.RabbitMQ
 }
 
-func NewRouter(store *storage.Postgres, mockReader *reader.MockReader, messageBroker *broker.RabbitMQ) (http.Handler, error) {
-	if store == nil || mockReader == nil || messageBroker == nil {
+func NewRouter(store *storage.Postgres, emailReader *reader.Source, messageBroker *broker.RabbitMQ) (http.Handler, error) {
+	if store == nil || emailReader == nil || messageBroker == nil {
 		return nil, errors.New("api dependencies are not configured")
 	}
 
 	h := &Handler{
 		store:  store,
-		reader: mockReader,
+		reader: emailReader,
 		broker: messageBroker,
 	}
 

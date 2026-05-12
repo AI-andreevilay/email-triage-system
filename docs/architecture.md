@@ -36,7 +36,7 @@ Current phase focuses on a minimal backend foundation for incremental delivery.
 Main components:
 
 - API Server
-- Email Reader (mock for MVP)
+- Email Reader (mock or Gmail)
 - Broker (RabbitMQ)
 - Storage (PostgreSQL)
 - Classifier
@@ -60,7 +60,9 @@ Client -> API -> Reader -> Broker -> Classifier Worker -> PostgreSQL -> Label Wo
 - Publishes `email.raw` events to broker
 
 ### 5.2 Email Reader
-- Fetches emails (mock for MVP)
+- Fetches emails from:
+  - mock source (default)
+  - Gmail API source (optional, OAuth token based)
 - Normalizes data
 
 ### 5.3 Broker (RabbitMQ)
@@ -147,10 +149,10 @@ Client -> API -> Reader -> Broker -> Classifier Worker -> PostgreSQL -> Label Wo
 
 ## 7. Data Flow
 
-Current (Iteration 8):
+Current (Iteration 9 - Reader):
 
 1. User triggers scan
-2. System fetches emails from reader
+2. System fetches emails from configured reader source (mock or Gmail)
 3. API publishes one `email.raw` event per message to RabbitMQ
 4. Classifier worker consumes `email.raw`
 5. Worker classifies using default + user rules
@@ -200,6 +202,11 @@ Reason:
 Reason:
 - Introduce label stage and event contract before Gmail OAuth/API complexity
 - Validate end-to-end apply flow with DB updates only
+
+### Decision: Introduce real Gmail reader before real label apply
+Reason:
+- Validate Gmail OAuth and mailbox read path in dry-run mode first
+- Reduce integration risk by changing one external dependency at a time
 
 ### Decision: Start with single process API foundation
 Reason:

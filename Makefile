@@ -33,6 +33,10 @@ run-classifier-worker: ## run classifier worker
 run-label-worker: ## run label worker
 	go run ./cmd/label-worker
 
+.PHONY: gmail-auth
+gmail-auth: ## run Gmail OAuth flow and save token file
+	go run ./cmd/gmail-auth
+
 .PHONY: run
 run: run-infra migrate ## start infra, apply migrations and run API server
 	go run ./cmd/api-server

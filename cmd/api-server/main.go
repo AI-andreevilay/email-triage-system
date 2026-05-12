@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os/signal"
@@ -11,6 +12,7 @@ import (
 	"github.com/bzelijah/email-triage-system/internal/api"
 	"github.com/bzelijah/email-triage-system/internal/broker"
 	"github.com/bzelijah/email-triage-system/internal/config"
+	"github.com/bzelijah/email-triage-system/internal/gmail"
 	"github.com/bzelijah/email-triage-system/internal/reader"
 	"github.com/bzelijah/email-triage-system/internal/storage"
 )
@@ -31,7 +33,31 @@ func main() {
 	defer mq.Close()
 
 	mockReader := reader.NewMockReader()
-	router, err := api.NewRouter(pg, mockReader, mq)
+	var gmailClient *gmail.Client
+	if cfg.EmailSource == reader.SourceGmail {
+		gmailClient, err = gmail.NewClient(
+			context.Background(),
+			cfg.GmailCredentialsFile,
+			cfg.GmailTokenFile,
+			cfg.GmailUserID,
+		)
+		if err != nil {
+			log.Fatal(fmt.Errorf("init gmail client: %w", err))
+		}
+	}
+
+	emailReader, err := reader.NewSource(
+		cfg.EmailSource,
+		mockReader,
+		gmailClient,
+		cfg.GmailReadMaxResults,
+		cfg.GmailReadQuery,
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	router, err := api.NewRouter(pg, emailReader, mq)
 	if err != nil {
 		log.Fatal(err)
 	}
