@@ -1,6 +1,7 @@
 package classifier
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/bzelijah/email-triage-system/internal/reader"
@@ -77,11 +78,14 @@ func TestClassifierDefaultRules(t *testing.T) {
 			if result.Label != tt.wantLabel {
 				t.Fatalf("label = %s, want %s", result.Label, tt.wantLabel)
 			}
+			if result.Reason == "" {
+				t.Fatal("expected non-empty reason")
+			}
 		})
 	}
 }
 
-func TestClassifierUserRulesPriority(t *testing.T) {
+func TestClassifierUserRulePreferredWhenPriorityEqual(t *testing.T) {
 	c := New()
 
 	message := reader.Message{
@@ -92,18 +96,12 @@ func TestClassifierUserRulesPriority(t *testing.T) {
 
 	userRules := []rules.Rule{
 		{
-			RuleType:    rules.RuleTypeAnyContains,
-			RuleValue:   "sale",
-			TargetLabel: LabelSocial,
-			Enabled:     true,
-			Priority:    200,
-		},
-		{
-			RuleType:    rules.RuleTypeFromContains,
+			RuleType:    rules.RuleTypeSenderEmail,
+			Operator:    rules.OperatorEquals,
 			RuleValue:   "newsletter@store.com",
 			TargetLabel: LabelTransactions,
 			Enabled:     true,
-			Priority:    100,
+			Priority:    120,
 		},
 	}
 
@@ -111,7 +109,67 @@ func TestClassifierUserRulesPriority(t *testing.T) {
 	if result.Label != LabelTransactions {
 		t.Fatalf("label = %s, want %s", result.Label, LabelTransactions)
 	}
-	if result.Confidence != 0.99 {
-		t.Fatalf("confidence = %v, want 0.99", result.Confidence)
+	if !strings.Contains(result.Reason, "source=user") {
+		t.Fatalf("reason = %s, expected user source", result.Reason)
+	}
+}
+
+func TestClassifierHigherPriorityWinsRegardlessOfSource(t *testing.T) {
+	c := New()
+
+	message := reader.Message{
+		From:        "alerts@bank.com",
+		Subject:     "card transaction approved",
+		BodySnippet: "Paid successfully.",
+	}
+
+	userRules := []rules.Rule{
+		{
+			RuleType:    rules.RuleTypeSenderEmail,
+			Operator:    rules.OperatorEquals,
+			RuleValue:   "alerts@bank.com",
+			TargetLabel: LabelSocial,
+			Enabled:     true,
+			Priority:    50,
+		},
+	}
+
+	result := c.Classify(message, userRules)
+	if result.Label != LabelTransactions {
+		t.Fatalf("label = %s, want %s", result.Label, LabelTransactions)
+	}
+}
+
+func TestClassifierSpecificityWhenPriorityAndSourceEqual(t *testing.T) {
+	c := New()
+
+	message := reader.Message{
+		From:        "no-reply@accounts.google.com",
+		Subject:     "Security update",
+		BodySnippet: "Please review new sign-in",
+	}
+
+	userRules := []rules.Rule{
+		{
+			RuleType:    rules.RuleTypeSenderDomain,
+			Operator:    rules.OperatorContains,
+			RuleValue:   "google.com",
+			TargetLabel: LabelPromo,
+			Enabled:     true,
+			Priority:    100,
+		},
+		{
+			RuleType:    rules.RuleTypeSenderEmail,
+			Operator:    rules.OperatorEquals,
+			RuleValue:   "no-reply@accounts.google.com",
+			TargetLabel: LabelSecurity,
+			Enabled:     true,
+			Priority:    100,
+		},
+	}
+
+	result := c.Classify(message, userRules)
+	if result.Label != LabelSecurity {
+		t.Fatalf("label = %s, want %s", result.Label, LabelSecurity)
 	}
 }

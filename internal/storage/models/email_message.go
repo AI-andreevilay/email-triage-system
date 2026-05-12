@@ -8,6 +8,7 @@ type EmailMessage struct {
 	PredictedLabel string
 	AppliedLabel   *string
 	Confidence     float64
+	Reason         string
 	Status         string
 	ProcessedAt    *time.Time
 }

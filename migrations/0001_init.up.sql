@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS email_messages (
     predicted_label TEXT NOT NULL,
     applied_label TEXT,
     confidence DOUBLE PRECISION NOT NULL,
+    reason TEXT,
     status TEXT NOT NULL,
     processed_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -27,8 +28,11 @@ CREATE TABLE IF NOT EXISTS user_rules (
     id BIGSERIAL PRIMARY KEY,
     user_id TEXT NOT NULL,
     rule_type TEXT NOT NULL,
+    operator TEXT NOT NULL,
     rule_value TEXT NOT NULL,
     target_label TEXT NOT NULL,
     enabled BOOLEAN NOT NULL DEFAULT TRUE,
-    priority INTEGER NOT NULL DEFAULT 100
+    priority INTEGER NOT NULL DEFAULT 100,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

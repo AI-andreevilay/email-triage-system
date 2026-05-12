@@ -111,6 +111,7 @@ func (h *Handler) createScan(w http.ResponseWriter, r *http.Request) {
 			PredictedLabel: classification.Label,
 			AppliedLabel:   appliedLabel,
 			Confidence:     classification.Confidence,
+			Reason:         classification.Reason,
 			Status:         messageStatus,
 			ProcessedAt:    &now,
 		})
@@ -159,6 +160,7 @@ func toClassificationRules(in []storagemodels.UserRule) []rules.Rule {
 	for _, rule := range in {
 		result = append(result, rules.Rule{
 			RuleType:    rule.RuleType,
+			Operator:    rule.Operator,
 			RuleValue:   rule.RuleValue,
 			TargetLabel: rule.TargetLabel,
 			Enabled:     rule.Enabled,

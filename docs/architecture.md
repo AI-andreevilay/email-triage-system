@@ -44,11 +44,11 @@ Main components:
 
 Flow (MVP):
 
-Client -> API -> Reader -> Classifier -> DB
+Client -> API -> Reader -> Classifier -> PostgreSQL
 
 Future flow:
 
-Client -> API -> Reader -> Broker -> Classifier Worker -> DB -> Label Worker -> Gmail
+Client -> API -> Reader -> Broker -> Classifier Worker -> PostgreSQL -> Label Worker -> Gmail
 
 ---
 
@@ -64,8 +64,29 @@ Client -> API -> Reader -> Broker -> Classifier Worker -> DB -> Label Worker -> 
 - Normalizes data
 
 ### 5.3 Classifier
-- Rule-based classification
+- Explainable rule-based classification (MVP)
 - Categories: Job, Transactions, Security, Promo, Social, Unknown
+- Both default rules and user-defined rules are evaluated for each message
+- Supported operators (MVP): `equals`, `contains`
+- Rule selection:
+  1. Match all applicable rules
+  2. Score each match (`priority + source_bonus + specificity_bonus`)
+  3. Highest score wins
+  4. User rule wins when priority is equal
+  5. More specific rule wins when priority and source are equal
+  6. Fallback label is `Unknown` when no rule matches
+- Custom rule match inputs:
+  - sender email
+  - sender domain
+  - subject keywords
+  - optional body keywords (in memory only)
+- Example rules:
+  - sender_domain equals linkedin.com -> Job
+  - subject contains interview -> Job
+  - sender_email equals no-reply@accounts.google.com -> Security
+  - subject contains receipt -> Transactions
+- Each classification stores a short reason for dry-run review and debugging
+- Body keywords can be checked in memory during classification, but body content is never persisted
 
 ### 5.4 Storage
 - PostgreSQL
@@ -81,23 +102,40 @@ Client -> API -> Reader -> Broker -> Classifier Worker -> DB -> Label Worker -> 
 ## 6. Data Model
 
 ### email_messages
+- id
 - gmail_message_id
 - user_id
 - predicted_label
 - applied_label
 - confidence
+- reason
 - status
+- processed_at
+- created_at
+- unique(user_id, gmail_message_id)
 
 ### scan_runs
 - id
 - user_id
 - mode (dry_run / apply)
 - status
+- started_at
+- finished_at
+- total_found
+- total_processed
+- total_failed
 
 ### user_rules
+- id
+- user_id
 - rule_type
+- operator
 - rule_value
 - target_label
+- enabled
+- priority
+- created_at
+- updated_at
 
 ---
 
@@ -107,15 +145,15 @@ MVP:
 
 1. User triggers scan
 2. System fetches emails from reader
-3. Emails are classified
-4. Results are stored in DB
+3. Emails are classified by rules (default + user rules with priority)
+4. Results are stored in PostgreSQL
 5. Labels are applied (only in apply mode)
 
 Future (event-driven):
 
 1. Reader publishes events
 2. Classifier worker consumes events
-3. Results stored in DB
+3. Results stored in PostgreSQL
 4. Label worker applies labels
 
 ---
@@ -130,9 +168,9 @@ Future (event-driven):
 
 ## 9. Privacy
 
-- Email content is NOT stored
-- Classifier uses content in memory only
-- Only metadata is persisted
+- Email body may be used for in-memory rule matching only (for optional body keyword checks)
+- Email body is NOT stored
+- Only metadata and classification results are persisted
 
 ---
 
@@ -151,6 +189,22 @@ Reason:
 Reason:
 - Keep persistence explicit and simple
 - Enforce idempotency at DB level with unique constraint
+
+### Decision: Use explainable rule-based classifier in MVP
+Reason:
+- Deterministic behavior is easier to validate in a local MVP
+- Classification reason is visible for dry-run review and debugging
+- Supports custom user rules without introducing LLM complexity yet
+
+### Decision: Evaluate custom user rules before any future LLM classifier
+Reason:
+- User intent should override generic model behavior when explicit rules exist
+- Keeps classification predictable and easy to troubleshoot
+
+### Decision: Update initial migration directly while still local-only
+Reason:
+- No production/staging database exists yet
+- Faster iteration during early schema shaping
 
 ### Decision: Mock email reader before real integration
 Reason:

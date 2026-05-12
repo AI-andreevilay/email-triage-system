@@ -1,14 +1,21 @@
 package rules
 
 const (
-	RuleTypeFromContains    = "from_contains"
-	RuleTypeSubjectContains = "subject_contains"
-	RuleTypeBodyContains    = "body_contains"
-	RuleTypeAnyContains     = "any_contains"
+	RuleTypeSenderEmail  = "sender_email"
+	RuleTypeSenderDomain = "sender_domain"
+	RuleTypeSubject      = "subject"
+	RuleTypeBody         = "body"
+	RuleTypeAny          = "any"
+)
+
+const (
+	OperatorEquals   = "equals"
+	OperatorContains = "contains"
 )
 
 type Rule struct {
 	RuleType    string
+	Operator    string
 	RuleValue   string
 	TargetLabel string
 	Enabled     bool
