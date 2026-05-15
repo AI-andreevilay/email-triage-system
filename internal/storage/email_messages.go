@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 
 	"github.com/bzelijah/email-triage-system/internal/storage/models"
@@ -57,4 +58,32 @@ func (p *Postgres) MarkEmailLabelApplied(ctx context.Context, userID, gmailMessa
 	}
 
 	return nil
+}
+
+func (p *Postgres) GetEmailMessage(ctx context.Context, userID, gmailMessageID string) (models.EmailMessage, error) {
+	var message models.EmailMessage
+	err := p.db.QueryRowContext(
+		ctx,
+		`SELECT user_id, gmail_message_id, predicted_label, applied_label, confidence, reason, status, processed_at
+		 FROM email_messages
+		 WHERE user_id = $1 AND gmail_message_id = $2`,
+		userID,
+		gmailMessageID,
+	).Scan(
+		&message.UserID,
+		&message.GmailMessageID,
+		&message.PredictedLabel,
+		&message.AppliedLabel,
+		&message.Confidence,
+		&message.Reason,
+		&message.Status,
+		&message.ProcessedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return models.EmailMessage{}, ErrEmailMessageNotFound
+		}
+		return models.EmailMessage{}, err
+	}
+	return message, nil
 }

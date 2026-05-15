@@ -22,7 +22,6 @@ Current phase focuses on a minimal backend foundation for incremental delivery.
 - No multi-user support
 - No UI
 - No LLM-based classification
-- No Kubernetes (initially)
 - No multi-node Kubernetes cluster initially
 - No Kubernetes operators initially
 - No ArgoCD initially
@@ -159,7 +158,7 @@ Client -> API -> Reader -> Broker -> Classifier Worker -> PostgreSQL -> Label Wo
 
 ## 7. Data Flow
 
-Current (Iteration 9):
+Current (Iteration 10):
 
 1. User triggers scan
 2. System fetches emails from configured reader source (mock or Gmail)
@@ -275,9 +274,16 @@ Reason:
 - Reuse one database server while isolating projects by credentials and schema ownership
 - Keep this project isolated with dedicated database, dedicated DB user, and dedicated migrations
 
-### Decision: Keep Kubernetes out of the first MVP implementation unless explicitly requested
+### Decision: Introduce Kubernetes manifests after core event flow was stable
 Reason:
-- First runnable baseline should stay focused on product behavior, not infra complexity
+- Keep early iterations focused on core behavior
+- Add deployment practice separately once API/workers/broker/storage contracts were stable
+
+### Decision: Use project-scoped infra credentials in shared namespace setup
+Reason:
+- Shared `infra` namespace allows reuse across pet projects
+- Project-level DB/vhost users prevent accidental cross-project access
+- Keeps local setup close to production access boundaries
 
 ### Decision: Do not introduce dedicated subagent config files in early MVP
 Reason:
@@ -294,27 +300,35 @@ Reason:
 - Keep local workflow fast: run API + PostgreSQL, apply migrations, test scan/classification flow.
 
 ### 11.2 Initial MVP deployment
-- First runnable baseline does not require Kubernetes.
-- Prioritize correctness of the current event-driven MVP flow:
+- Current baseline supports Kubernetes deployment in one namespace.
+- Prioritize correctness of the current event-driven flow:
   Client -> API -> Reader -> Broker -> Classifier Worker -> PostgreSQL -> Label Worker -> Gmail API.
 
 ### 11.3 Future k3s deployment
-- Deploy later to a single-node k3s cluster on one Hetzner VPS.
+- Deploy to a single-node k3s cluster on one Hetzner VPS.
 - Keep deployment assets in git (manifests/Helm charts when introduced).
 - Publish app images to a registry such as GHCR.
 - Manage secrets in a reproducible way from git-controlled inputs and deployment steps, not only as ad-hoc in-cluster manual state.
 
 ### 11.4 Namespace strategy
-- Place this project in its own namespace.
-- Other pet projects may share the same cluster but run in separate namespaces.
+- Application components run in namespace `email-triage`.
+- Shared infrastructure services (`postgres`, `rabbitmq`) run in namespace `infra`.
+- Other pet projects may reuse infra services via dedicated DB users/vhosts and separate app namespaces.
 
-### 11.5 Shared PostgreSQL strategy
+### 11.5 Infrastructure access isolation
+- `email-triage` app does not use shared superuser credentials in runtime.
+- PostgreSQL access is scoped to project user/database (`email_triage_app` -> `email_triage`).
+- RabbitMQ access is scoped to project user/vhost (`email_triage_app` -> `email-triage`).
+- Runtime credentials are injected via Kubernetes `Secret` (`email-triage-secrets`), while non-sensitive config stays in `ConfigMap`.
+- This separation reduces accidental cross-project data and queue access in shared infra.
+
+### 11.6 Shared PostgreSQL strategy
 - A shared PostgreSQL instance can serve multiple pet projects.
 - Isolate each project by separate database and separate DB user.
 - For this project: dedicated database, dedicated DB user, dedicated migrations.
 - Running PostgreSQL inside k3s as StatefulSet + PVC is acceptable for learning in this pet-project context.
 
-### 11.6 Backup and restore principles
+### 11.7 Backup and restore principles
 - Backups are mandatory if PostgreSQL runs inside the cluster.
 - Define scheduled logical backups and keep copies outside the node.
 - Keep a documented restore procedure and test restore periodically.
@@ -334,7 +348,6 @@ Reason:
 
 - Add RabbitMQ for async processing
 - Add Gmail API integration
-- Add Kubernetes deployment
 - Add observability (Prometheus)
 - Add LLM-based classification
 

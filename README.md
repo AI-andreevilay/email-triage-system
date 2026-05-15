@@ -2,7 +2,7 @@
 
 Backend pet project for automatic Gmail email triage and labeling.
 
-## Current Scope (Iteration 9)
+## Current Scope (Iteration 10)
 
 - Project skeleton for API/workers/migrator
 - PostgreSQL in Docker Compose
@@ -30,6 +30,12 @@ Backend pet project for automatic Gmail email triage and labeling.
 - Label worker updates `applied_label` and `status=applied` in PostgreSQL on success
 - Real Gmail reader (optional via config) for scan source
 - OAuth CLI command to connect your Gmail account and save token
+- Docker image build via root `Dockerfile`
+- Kubernetes manifests for local cluster deployment in `deployments/k8s`
+- Kubernetes migrator `Job` for applying SQL migrations in cluster
+- Label worker deployment is included, but scaled to `0` by default
+- Infra services (`postgres`, `rabbitmq`) run in dedicated namespace `infra`
+- App uses project-scoped infra credentials from Kubernetes `Secret` (`email-triage-secrets`)
 
 ## Tech Stack
 
@@ -37,6 +43,7 @@ Backend pet project for automatic Gmail email triage and labeling.
 - PostgreSQL
 - RabbitMQ
 - Docker Compose
+- Kubernetes
 
 ## Run Locally
 
@@ -112,6 +119,61 @@ Client -> API -> Reader -> RabbitMQ (`email.raw`) -> Classifier Worker -> Postgr
 
 Detailed notes: `docs/architecture.md`.
 
+## Run on Kubernetes (Iteration 10)
+
+Minimal flow for local cluster (for example `kind`):
+
+1. Create local cluster:
+   ```bash
+   kind create cluster --name email-triage
+   kubectl config use-context kind-email-triage
+   ```
+2. Build app image:
+   ```bash
+   docker build -t email-triage-system:local .
+   ```
+3. If using `kind`, load image into cluster:
+   ```bash
+   kind load docker-image email-triage-system:local --name email-triage
+   ```
+4. Apply manifests:
+   ```bash
+   kubectl apply -k deployments/k8s
+   ```
+5. Verify namespaces and pods:
+   ```bash
+   kubectl get ns
+   kubectl -n infra get pods
+   kubectl -n email-triage get pods
+   ```
+6. Bootstrap Postgres access for this project:
+   ```bash
+   kubectl -n infra delete job postgres-bootstrap --ignore-not-found
+   kubectl -n infra apply -f deployments/k8s/postgres-bootstrap-job.yaml
+   kubectl -n infra logs -f job/postgres-bootstrap
+   ```
+7. Run migrations:
+   ```bash
+   kubectl -n email-triage delete job migrator --ignore-not-found
+   kubectl -n email-triage apply -f deployments/k8s/migrator-job.yaml
+   kubectl -n email-triage logs -f job/migrator
+   ```
+8. Port-forward API and check health:
+   ```bash
+   kubectl -n email-triage port-forward svc/api-server 8080:8080
+   curl http://localhost:8080/healthz
+   ```
+9. Trigger dry-run scan:
+   ```bash
+   curl -X POST http://localhost:8080/scans \
+     -H "Content-Type: application/json" \
+     -d '{"mode":"dry_run"}'
+   ```
+
+Important:
+- This is local-learning setup. `email-triage-secrets` is stored in git for convenience.
+- For VPS/production-like setup, create `Secret` outside git (SealedSecrets/SOPS/secret manager).
+
 ## Gmail Connection (for real reader)
 
 1. In Google Cloud Console:
@@ -130,13 +192,13 @@ Detailed notes: `docs/architecture.md`.
    After Google consent, token is saved automatically.
 4. Start API with Gmail source:
    ```bash
-EMAIL_SOURCE=gmail \
-GMAIL_CREDENTIALS_FILE=secrets/gmail_credentials.json \
-GMAIL_TOKEN_FILE=secrets/gmail_token.json \
-GMAIL_READ_MAX_RESULTS=100 \
-GMAIL_READ_QUERY='in:inbox -in:trash' \
-go run ./cmd/api-server
-```
+    EMAIL_SOURCE=gmail \
+    GMAIL_CREDENTIALS_FILE=secrets/gmail_credentials.json \
+    GMAIL_TOKEN_FILE=secrets/gmail_token.json \
+    GMAIL_READ_MAX_RESULTS=100 \
+    GMAIL_READ_QUERY='in:inbox -in:trash' \
+    go run ./cmd/api-server
+    ```
 5. Trigger dry-run scan:
    ```bash
    curl -X POST http://localhost:8080/scans \
