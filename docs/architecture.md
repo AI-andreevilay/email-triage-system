@@ -48,7 +48,7 @@ Client -> API -> Reader -> Broker (email.raw) -> Classifier Worker -> PostgreSQL
 
 Future flow:
 
-Client -> API -> Reader -> Broker -> Classifier Worker -> PostgreSQL -> Label Worker -> Gmail
+Client -> API -> Reader -> Broker -> Classifier Worker -> PostgreSQL -> Label Worker -> Gmail -> Log Pipeline -> AI Log Analytics
 
 ---
 
@@ -105,6 +105,15 @@ Client -> API -> Reader -> Broker -> Classifier Worker -> PostgreSQL -> Label Wo
 ### 5.6 Workers
 - Classifier worker (current)
 - Label applier worker (current, Gmail API apply)
+
+### 5.7 AI Log Analytics (future)
+- Consumes structured operational events from API/workers (errors, retries, latency, label-apply failures)
+- Runs anomaly detection and trend analysis for system health and delivery quality
+- Produces actionable insights:
+  - failure clusters (for example by sender domain or Gmail error code)
+  - retry hot spots and queue lag warnings
+  - candidate rule suggestions for recurring unknown or misclassified messages
+- Stores summarized insights only (no raw email body)
 
 ---
 
@@ -169,6 +178,8 @@ Future (event-driven):
 2. Classifier worker consumes events
 3. Results stored in PostgreSQL
 4. Label worker applies labels
+5. API/workers publish structured operational logs/events
+6. AI analytics job/worker processes logs and writes insight summaries
 
 ---
 
@@ -326,3 +337,43 @@ Reason:
 - Add Kubernetes deployment
 - Add observability (Prometheus)
 - Add LLM-based classification
+
+## Ideas
+
+This section captures ideas that are not in committed scope yet.
+
+### 1 AI Log Analytics
+- Status: `idea`
+- Why: detect failure clusters and suggest rule improvements from operational events
+- MVP: daily/weekly anomaly summary from structured logs only
+- Risks: noisy signals without enough event volume
+- Success criteria: useful, actionable insights with low false-positive rate
+
+### 2 Fresh Email Digest (Rule-Based, non-AI)
+- Status: `idea`
+- Why: quick visibility into incoming mail without opening Gmail
+- MVP:
+  - Periodic Telegram digest
+  - "You received X new emails in last N hours"
+  - Breakdown by category (Job / Transactions / Security / Promo / Social / Unknown)
+  - Optional top senders and failed-to-classify count (`Unknown`)
+- Risks: digest noise and too frequent notifications
+- Success criteria: user can understand mailbox changes in <30 seconds from one message
+
+### 3 Fresh Email Digest (AI-Assisted)
+- Status: `idea`
+- Why: compress content of fresh emails into actionable summary
+- MVP:
+  - AI-generated short summary for new messages
+  - Optional extracted action items and priority hints
+  - Same Telegram delivery channel as rule-based digest
+- Risks:
+  - privacy constraints for email content processing
+  - model cost and latency
+  - hallucinated or overconfident summaries
+- Success criteria: summaries save review time while staying factually reliable
+
+### Suggested Rollout Order
+1. Implement 2 first (predictable and low cost).
+2. Add 3 behind a feature flag and explicit opt-in.
+3. Keep fallback to 2 when AI is unavailable.

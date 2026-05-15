@@ -173,3 +173,68 @@ func TestClassifierSpecificityWhenPriorityAndSourceEqual(t *testing.T) {
 		t.Fatalf("label = %s, want %s", result.Label, LabelSecurity)
 	}
 }
+
+func TestClassifierRealWorldJobMails(t *testing.T) {
+	c := New()
+
+	tests := []struct {
+		name      string
+		message   reader.Message
+		wantLabel string
+	}{
+		{
+			name: "application received",
+			message: reader.Message{
+				From:        "no-reply@chronosphere.io",
+				Subject:     "Thanks for applying to Chronosphere",
+				BodySnippet: "Your application has been received and we will review it right away.",
+			},
+			wantLabel: LabelJob,
+		},
+		{
+			name: "application for backend engineer",
+			message: reader.Message{
+				From:        "careers@example.com",
+				Subject:     "Application for Backend Engineer (Go-lang)",
+				BodySnippet: "We have received your application and will contact you with status.",
+			},
+			wantLabel: LabelJob,
+		},
+		{
+			name: "subscription upsell",
+			message: reader.Message{
+				From:        "no-reply@freelancer.com",
+				Subject:     "Your Freelancer Plus subscription will end soon",
+				BodySnippet: "Take action now to keep your tools and upgrade your plan.",
+			},
+			wantLabel: LabelPromo,
+		},
+		{
+			name: "hiring test invitation",
+			message: reader.Message{
+				From:        "recruiting@testgorilla.com",
+				Subject:     "Your application is live",
+				BodySnippet: "Complete your assigned tests so we can match you with your ideal role.",
+			},
+			wantLabel: LabelJob,
+		},
+		{
+			name: "rejection email from hiring team",
+			message: reader.Message{
+				From:        "hiring@glacis.com",
+				Subject:     "Update on your application",
+				BodySnippet: "Glacis Hiring Team reviewed your application and will not move forward.",
+			},
+			wantLabel: LabelJob,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := c.Classify(tt.message, nil)
+			if result.Label != tt.wantLabel {
+				t.Fatalf("label = %s, want %s, reason=%s", result.Label, tt.wantLabel, result.Reason)
+			}
+		})
+	}
+}
