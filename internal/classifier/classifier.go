@@ -240,11 +240,17 @@ func extractSenderDomain(senderEmail string) string {
 }
 
 var defaultRules = []rules.Rule{
+	{RuleType: rules.RuleTypeSenderEmail, Operator: rules.OperatorEquals, RuleValue: "contact.center@permatabank.co.id", TargetLabel: LabelTransactions, Enabled: true, Priority: 260},
 	{RuleType: rules.RuleTypeSenderDomain, Operator: rules.OperatorContains, RuleValue: "google.com", TargetLabel: LabelSecurity, Enabled: true, Priority: 220},
 	{RuleType: rules.RuleTypeSubject, Operator: rules.OperatorContains, RuleValue: "sign-in", TargetLabel: LabelSecurity, Enabled: true, Priority: 210},
 	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "verification code", TargetLabel: LabelSecurity, Enabled: true, Priority: 210},
 	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "otp", TargetLabel: LabelSecurity, Enabled: true, Priority: 210},
 	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "2fa", TargetLabel: LabelSecurity, Enabled: true, Priority: 210},
+	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "authenticator", TargetLabel: LabelSecurity, Enabled: true, Priority: 210},
+	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "lock your account", TargetLabel: LabelSecurity, Enabled: true, Priority: 210},
+	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "если это не были вы", TargetLabel: LabelSecurity, Enabled: true, Priority: 210},
+	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "вошла в систему", TargetLabel: LabelSecurity, Enabled: true, Priority: 205},
+	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "подтвердить адрес эл. почты", TargetLabel: LabelSecurity, Enabled: true, Priority: 205},
 	{RuleType: rules.RuleTypeSenderDomain, Operator: rules.OperatorContains, RuleValue: "bank.com", TargetLabel: LabelTransactions, Enabled: true, Priority: 180},
 	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "transaction", TargetLabel: LabelTransactions, Enabled: true, Priority: 170},
 	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "payment", TargetLabel: LabelTransactions, Enabled: true, Priority: 170},
@@ -255,6 +261,9 @@ var defaultRules = []rules.Rule{
 	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "thank you for applying", TargetLabel: LabelJob, Enabled: true, Priority: 180},
 	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "your application has been received", TargetLabel: LabelJob, Enabled: true, Priority: 180},
 	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "we have received your application", TargetLabel: LabelJob, Enabled: true, Priority: 180},
+	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "thank you for taking the time to apply", TargetLabel: LabelJob, Enabled: true, Priority: 180},
+	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "talent acquisition team", TargetLabel: LabelJob, Enabled: true, Priority: 175},
+	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "will not be proceeding at this time", TargetLabel: LabelJob, Enabled: true, Priority: 175},
 	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "hiring team", TargetLabel: LabelJob, Enabled: true, Priority: 170},
 	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "backend engineer", TargetLabel: LabelJob, Enabled: true, Priority: 170},
 	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "applicant", TargetLabel: LabelJob, Enabled: true, Priority: 165},

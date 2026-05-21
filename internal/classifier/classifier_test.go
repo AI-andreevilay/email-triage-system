@@ -227,6 +227,33 @@ func TestClassifierRealWorldJobMails(t *testing.T) {
 			},
 			wantLabel: LabelJob,
 		},
+		{
+			name: "permatabank transaction sender",
+			message: reader.Message{
+				From:        "contact.center@permatabank.co.id",
+				Subject:     "Informasi Transaksi",
+				BodySnippet: "Terima kasih telah menggunakan layanan kami.",
+			},
+			wantLabel: LabelTransactions,
+		},
+		{
+			name: "steam guard authenticator security",
+			message: reader.Message{
+				From:        "noreply@steampowered.com",
+				Subject:     "Steam Guard Mobile Authenticator",
+				BodySnippet: "An SMS code has been sent to remove or replace the Steam Guard Mobile Authenticator on your account.",
+			},
+			wantLabel: LabelSecurity,
+		},
+		{
+			name: "job rejection talent acquisition",
+			message: reader.Message{
+				From:        "talent@cozey.com",
+				Subject:     "Update on your application",
+				BodySnippet: "Thank you for taking the time to apply. We will not be proceeding at this time. The Talent Acquisition Team.",
+			},
+			wantLabel: LabelJob,
+		},
 	}
 
 	for _, tt := range tests {
