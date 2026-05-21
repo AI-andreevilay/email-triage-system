@@ -31,7 +31,7 @@ Backend pet project for automatic Gmail email triage and labeling.
 - Real Gmail reader (optional via config) for scan source
 - OAuth CLI command to connect your Gmail account and save token
 - Docker image build via root `Dockerfile`
-- Kubernetes manifests live in private `infra` repo (see `../infra/k8s/email-triage-system` in this workspace)
+- Kubernetes manifests live in private `k3s-deploy` repo (see `../k3s-deploy/k3s/email-triage-system` in this workspace)
 - Kubernetes migrator `Job` for applying SQL migrations in cluster
 - Label worker deployment is included, but scaled to `0` by default
 - Infra services (`postgres`, `rabbitmq`) run in dedicated namespace `infra`
@@ -121,7 +121,7 @@ Detailed notes: `docs/architecture.md`.
 
 ## Run on Kubernetes (Iteration 10)
 
-Kubernetes manifests were moved to the private `infra` repo: see `../infra/README.md`.
+Kubernetes manifests were moved to the private `k3s-deploy` repo: see `../k3s-deploy/README.md`.
 
 ## Gmail Connection (for real reader)
 
