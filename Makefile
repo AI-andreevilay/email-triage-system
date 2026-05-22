@@ -2,6 +2,7 @@ SHELL := /bin/bash
 
 COMPOSE_FILE := deployments/docker-compose.yml
 INFRA_SERVICES := postgres rabbitmq
+APP_SERVICES := migrator api-server classifier-worker label-worker
 
 .DEFAULT_GOAL := help
 
@@ -16,6 +17,14 @@ run-infra: ## start local infrastructure (PostgreSQL + RabbitMQ)
 .PHONY: stop-infra
 stop-infra: ## stop local infrastructure
 	docker compose -f $(COMPOSE_FILE) down
+
+.PHONY: stop
+stop: ## stop local Docker Compose stack
+	docker compose -f $(COMPOSE_FILE) down
+
+.PHONY: logs
+logs: ## follow local Docker Compose logs
+	docker compose -f $(COMPOSE_FILE) logs -f
 
 .PHONY: migrate
 migrate: ## apply SQL migrations
@@ -38,8 +47,8 @@ gmail-auth: ## run Gmail OAuth flow and save token file
 	go run ./cmd/gmail-auth
 
 .PHONY: run
-run: run-infra migrate ## start infra, apply migrations and run API server
-	go run ./cmd/api-server
+run: ## start full local Docker Compose stack
+	docker compose -f $(COMPOSE_FILE) up --build $(APP_SERVICES)
 
 .PHONY: test
 test: ## run tests

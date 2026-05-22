@@ -51,36 +51,36 @@ Backend pet project for automatic Gmail email triage and labeling.
    ```bash
    make help
    ```
-2. Install local dependencies:
+2. Start the full local Docker Compose stack:
    ```bash
-   make install
+   make run
    ```
-3. Start PostgreSQL:
-   ```bash
-   make run-infra
-   ```
-4. Apply migrations:
-   ```bash
-   make migrate
-   ```
-5. Run API server:
-   ```bash
-   make run-api
-   ```
-6. Check health:
+   This builds the app image, starts PostgreSQL and RabbitMQ, applies migrations, then runs:
+   - API server
+   - classifier worker
+   - label worker
+3. Check health:
    ```bash
    make healthz
    ```
-7. Trigger scan:
+4. Trigger scan:
    ```bash
    make scan-dry-run
    ```
+5. Stop the stack:
+   ```bash
+   make stop
+   ```
 
-One-command flow:
+Useful local commands:
 
 ```bash
-make run
+make logs      # follow Docker Compose logs
+make run-infra # start only PostgreSQL + RabbitMQ
+make install   # install local Go dependencies for non-Docker runs
 ```
+
+The full stack starts `label-worker`, so local Gmail files must exist at `secrets/gmail_credentials.json` and `secrets/gmail_token.json`.
 
 ## User Rules (MVP)
 

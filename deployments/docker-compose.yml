@@ -28,5 +28,94 @@ services:
       timeout: 5s
       retries: 10
 
+  migrator:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: email-triage-migrator
+    command: ["/app/migrator"]
+    environment: &app_environment
+      POSTGRES_URL: "postgres://postgres:postgres@postgres:5432/email_triage?sslmode=disable"
+      RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
+      MIGRATIONS_DIR: "/app/migrations"
+      EMAIL_SOURCE: "${EMAIL_SOURCE:-mock}"
+      GMAIL_CREDENTIALS_FILE: "/app/secrets/gmail_credentials.json"
+      GMAIL_TOKEN_FILE: "/app/secrets/gmail_token.json"
+      GMAIL_USER_ID: "${GMAIL_USER_ID:-me}"
+      GMAIL_READ_MAX_RESULTS: "${GMAIL_READ_MAX_RESULTS:-100}"
+      GMAIL_READ_QUERY: "${GMAIL_READ_QUERY:-in:inbox -in:trash}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api-server:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: email-triage-api-server
+    command: ["/app/api-server"]
+    user: "0:0"
+    environment: *app_environment
+    ports:
+      - "8080:8080"
+    secrets:
+      - source: gmail_credentials
+        target: /app/secrets/gmail_credentials.json
+      - source: gmail_token
+        target: /app/secrets/gmail_token.json
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  classifier-worker:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: email-triage-classifier-worker
+    command: ["/app/classifier-worker"]
+    environment: *app_environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  label-worker:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: email-triage-label-worker
+    command: ["/app/label-worker"]
+    user: "0:0"
+    environment: *app_environment
+    secrets:
+      - source: gmail_credentials
+        target: /app/secrets/gmail_credentials.json
+      - source: gmail_token
+        target: /app/secrets/gmail_token.json
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
 volumes:
   postgres_data:
+
+secrets:
+  gmail_credentials:
+    file: ../secrets/gmail_credentials.json
+  gmail_token:
+    file: ../secrets/gmail_token.json

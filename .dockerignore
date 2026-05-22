@@ -1,0 +1,11 @@
+.git
+.idea
+.codex
+
+.env
+secrets/
+
+*.out
+coverage.*
+*.coverprofile
+profile.cov
