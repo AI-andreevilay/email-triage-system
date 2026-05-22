@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"time"
 
@@ -100,6 +101,7 @@ func (h *Handler) createScan(w http.ResponseWriter, r *http.Request) {
 
 		return nil
 	}); err != nil {
+		log.Printf("failed to list messages for scan run_id=%d user_id=%s source error: %v", runID, defaultUserID, err)
 		failRun(totalFound, totalProcessed, totalFailed)
 		writeJSONError(w, http.StatusInternalServerError, "failed to list messages")
 		return
