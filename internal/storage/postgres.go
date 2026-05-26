@@ -10,6 +10,7 @@ import (
 
 var ErrAlreadyProcessed = errors.New("email already processed")
 var ErrEmailMessageNotFound = errors.New("email message not found")
+var ErrScanRunNotFound = errors.New("scan run not found")
 
 type Postgres struct {
 	db *sql.DB

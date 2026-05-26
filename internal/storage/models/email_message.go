@@ -3,6 +3,7 @@ package models
 import "time"
 
 type EmailMessage struct {
+	ScanRunID      *int64
 	UserID         string
 	GmailMessageID string
 	PredictedLabel string

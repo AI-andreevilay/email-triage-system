@@ -98,7 +98,9 @@ func (w *ClassifierWorker) processRawEmail(ctx context.Context, body []byte) err
 	}
 
 	now := time.Now().UTC()
+	scanRunID := event.ScanRunID
 	err = w.store.InsertEmailMessage(ctx, storagemodels.EmailMessage{
+		ScanRunID:      &scanRunID,
 		UserID:         event.UserID,
 		GmailMessageID: event.Message.GmailMessageID,
 		PredictedLabel: result.Label,

@@ -30,6 +30,7 @@ func NewRouter(store *storage.Postgres, emailReader *reader.Source, messageBroke
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", healthz)
 	mux.HandleFunc("POST /scans", h.createScan)
+	mux.HandleFunc("GET /scans/{id}", h.getScan)
 	return mux, nil
 }
 

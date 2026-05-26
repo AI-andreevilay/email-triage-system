@@ -13,8 +13,9 @@ func (p *Postgres) InsertEmailMessage(ctx context.Context, message models.EmailM
 	_, err := p.db.ExecContext(
 		ctx,
 		`INSERT INTO email_messages
-		(user_id, gmail_message_id, predicted_label, applied_label, confidence, reason, status, processed_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		(scan_run_id, user_id, gmail_message_id, predicted_label, applied_label, confidence, reason, status, processed_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		message.ScanRunID,
 		message.UserID,
 		message.GmailMessageID,
 		message.PredictedLabel,
@@ -64,12 +65,13 @@ func (p *Postgres) GetEmailMessage(ctx context.Context, userID, gmailMessageID s
 	var message models.EmailMessage
 	err := p.db.QueryRowContext(
 		ctx,
-		`SELECT user_id, gmail_message_id, predicted_label, applied_label, confidence, reason, status, processed_at
+		`SELECT scan_run_id, user_id, gmail_message_id, predicted_label, applied_label, confidence, reason, status, processed_at
 		 FROM email_messages
 		 WHERE user_id = $1 AND gmail_message_id = $2`,
 		userID,
 		gmailMessageID,
 	).Scan(
+		&message.ScanRunID,
 		&message.UserID,
 		&message.GmailMessageID,
 		&message.PredictedLabel,
@@ -86,4 +88,33 @@ func (p *Postgres) GetEmailMessage(ctx context.Context, userID, gmailMessageID s
 		return models.EmailMessage{}, err
 	}
 	return message, nil
+}
+
+func (p *Postgres) CountEmailMessagesByScanRun(ctx context.Context, scanRunID int64) (map[string]int, error) {
+	rows, err := p.db.QueryContext(
+		ctx,
+		`SELECT status, COUNT(*)
+		 FROM email_messages
+		 WHERE scan_run_id = $1
+		 GROUP BY status`,
+		scanRunID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string]int)
+	for rows.Next() {
+		var status string
+		var count int
+		if err := rows.Scan(&status, &count); err != nil {
+			return nil, err
+		}
+		result[status] = count
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
 }

@@ -127,6 +127,14 @@ Trigger a dry-run scan:
 make scan-dry-run
 ```
 
+The scan request returns after the scan run is accepted. Use the returned `run_id` to inspect enqueue progress:
+
+```bash
+curl http://localhost:8080/scans/1
+```
+
+The response includes enqueue counters (`total_found`, `total_processed`, `total_failed`) and downstream email status counters (`dry_run`, `classified`, `applied`).
+
 Stop the stack:
 
 ```bash
