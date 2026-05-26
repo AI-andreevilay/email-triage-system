@@ -99,7 +99,7 @@ func (w *ClassifierWorker) processRawEmail(ctx context.Context, body []byte) err
 
 	now := time.Now().UTC()
 	scanRunID := event.ScanRunID
-	err = w.store.InsertEmailMessage(ctx, storagemodels.EmailMessage{
+	err = w.store.UpsertEmailMessage(ctx, storagemodels.EmailMessage{
 		ScanRunID:      &scanRunID,
 		UserID:         event.UserID,
 		GmailMessageID: event.Message.GmailMessageID,
@@ -111,40 +111,6 @@ func (w *ClassifierWorker) processRawEmail(ctx context.Context, body []byte) err
 		ProcessedAt:    &now,
 	})
 	if err != nil {
-		if errors.Is(err, storage.ErrAlreadyProcessed) {
-			if event.Mode != "apply" {
-				return nil
-			}
-
-			existing, getErr := w.store.GetEmailMessage(ctx, event.UserID, event.Message.GmailMessageID)
-			if getErr != nil {
-				return getErr
-			}
-			if existing.Status == "applied" || existing.AppliedLabel != nil {
-				return nil
-			}
-
-			label := existing.PredictedLabel
-			if label == "" {
-				label = result.Label
-			}
-			confidence := existing.Confidence
-			if confidence == 0 {
-				confidence = result.Confidence
-			}
-
-			return w.broker.PublishClassifiedEmail(ctx, broker.ClassifiedEmailEvent{
-				ScanRunID:    event.ScanRunID,
-				UserID:       event.UserID,
-				Mode:         event.Mode,
-				ClassifiedAt: time.Now().UTC(),
-				Classification: broker.ClassifiedEmailMessage{
-					GmailMessageID: event.Message.GmailMessageID,
-					PredictedLabel: label,
-					Confidence:     confidence,
-				},
-			})
-		}
 		return err
 	}
 

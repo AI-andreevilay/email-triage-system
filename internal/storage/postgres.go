@@ -8,7 +8,6 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-var ErrAlreadyProcessed = errors.New("email already processed")
 var ErrEmailMessageNotFound = errors.New("email message not found")
 var ErrScanRunNotFound = errors.New("scan run not found")
 

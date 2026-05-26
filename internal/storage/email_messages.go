@@ -6,7 +6,6 @@ import (
 	"errors"
 
 	"github.com/bzelijah/email-triage-system/internal/storage/models"
-	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func (p *Postgres) InsertEmailMessage(ctx context.Context, message models.EmailMessage) error {
@@ -25,14 +24,35 @@ func (p *Postgres) InsertEmailMessage(ctx context.Context, message models.EmailM
 		message.Status,
 		message.ProcessedAt,
 	)
-	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return ErrAlreadyProcessed
-		}
-		return err
-	}
-	return nil
+	return err
+}
+
+func (p *Postgres) UpsertEmailMessage(ctx context.Context, message models.EmailMessage) error {
+	_, err := p.db.ExecContext(
+		ctx,
+		`INSERT INTO email_messages
+		(scan_run_id, user_id, gmail_message_id, predicted_label, applied_label, confidence, reason, status, processed_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		ON CONFLICT (user_id, gmail_message_id)
+		DO UPDATE SET
+			scan_run_id = EXCLUDED.scan_run_id,
+			predicted_label = EXCLUDED.predicted_label,
+			applied_label = EXCLUDED.applied_label,
+			confidence = EXCLUDED.confidence,
+			reason = EXCLUDED.reason,
+			status = EXCLUDED.status,
+			processed_at = EXCLUDED.processed_at`,
+		message.ScanRunID,
+		message.UserID,
+		message.GmailMessageID,
+		message.PredictedLabel,
+		message.AppliedLabel,
+		message.Confidence,
+		message.Reason,
+		message.Status,
+		message.ProcessedAt,
+	)
+	return err
 }
 
 func (p *Postgres) MarkEmailLabelApplied(ctx context.Context, userID, gmailMessageID, appliedLabel string) error {
