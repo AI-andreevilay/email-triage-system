@@ -23,7 +23,8 @@ const (
 )
 
 type createScanRequest struct {
-	Mode string `json:"mode"`
+	Mode  string `json:"mode"`
+	Query string `json:"query"`
 }
 
 type createScanResponse struct {
@@ -32,19 +33,22 @@ type createScanResponse struct {
 	UserID string `json:"user_id"`
 	Mode   string `json:"mode"`
 	Status string `json:"status"`
+	Query  string `json:"query,omitempty"`
 }
 
 type scanResponse struct {
-	RunID          int64        `json:"run_id"`
-	UserID         string       `json:"user_id"`
-	Mode           string       `json:"mode"`
-	Status         string       `json:"status"`
-	StartedAt      time.Time    `json:"started_at"`
-	FinishedAt     *time.Time   `json:"finished_at,omitempty"`
-	TotalFound     int          `json:"total_found"`
-	TotalProcessed int          `json:"total_processed"`
-	TotalFailed    int          `json:"total_failed"`
-	EmailStatus    statusCounts `json:"email_status"`
+	RunID            int64        `json:"run_id"`
+	UserID           string       `json:"user_id"`
+	Mode             string       `json:"mode"`
+	Status           string       `json:"status"`
+	ProcessingStatus string       `json:"processing_status"`
+	StartedAt        time.Time    `json:"started_at"`
+	FinishedAt       *time.Time   `json:"finished_at,omitempty"`
+	TotalFound       int          `json:"total_found"`
+	TotalProcessed   int          `json:"total_processed"`
+	TotalFailed      int          `json:"total_failed"`
+	EmailStatus      statusCounts `json:"email_status"`
+	Query            string       `json:"query,omitempty"`
 }
 
 type statusCounts struct {
@@ -81,7 +85,7 @@ func (h *Handler) createScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go h.enqueueScan(context.Background(), runID, defaultUserID, mode)
+	go h.enqueueScan(context.Background(), runID, defaultUserID, mode, req.Query)
 
 	writeJSON(w, http.StatusAccepted, createScanResponse{
 		Result: "ok",
@@ -89,10 +93,11 @@ func (h *Handler) createScan(w http.ResponseWriter, r *http.Request) {
 		UserID: defaultUserID,
 		Mode:   mode,
 		Status: "enqueuing",
+		Query:  req.Query,
 	})
 }
 
-func (h *Handler) enqueueScan(ctx context.Context, runID int64, userID, mode string) {
+func (h *Handler) enqueueScan(ctx context.Context, runID int64, userID, mode, query string) {
 	failRun := func(totalFound, totalProcessed, totalFailed int) {
 		_ = h.store.CompleteScanRun(ctx, storagemodels.ScanRun{
 			ID:             runID,
@@ -107,7 +112,18 @@ func (h *Handler) enqueueScan(ctx context.Context, runID int64, userID, mode str
 	totalProcessed := 0
 	totalFailed := 0
 
-	if err := h.reader.IterateMessages(ctx, userID, func(batch []reader.Message) error {
+	emailReader := h.reader
+	if query != "" {
+		var err error
+		emailReader, err = h.reader.WithQuery(query)
+		if err != nil {
+			log.Printf("failed to create scan reader run_id=%d user_id=%s error=%v", runID, userID, err)
+			failRun(totalFound, totalProcessed, totalFailed)
+			return
+		}
+	}
+
+	if err := emailReader.IterateMessages(ctx, userID, func(batch []reader.Message) error {
 		totalFound += len(batch)
 
 		for _, message := range batch {
@@ -185,21 +201,33 @@ func (h *Handler) getScan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, scanResponse{
-		RunID:          run.ID,
-		UserID:         run.UserID,
-		Mode:           run.Mode,
-		Status:         run.Status,
-		StartedAt:      run.StartedAt,
-		FinishedAt:     run.FinishedAt,
-		TotalFound:     run.TotalFound,
-		TotalProcessed: run.TotalProcessed,
-		TotalFailed:    run.TotalFailed,
+		RunID:            run.ID,
+		UserID:           run.UserID,
+		Mode:             run.Mode,
+		Status:           run.Status,
+		ProcessingStatus: processingStatus(run, counts),
+		StartedAt:        run.StartedAt,
+		FinishedAt:       run.FinishedAt,
+		TotalFound:       run.TotalFound,
+		TotalProcessed:   run.TotalProcessed,
+		TotalFailed:      run.TotalFailed,
 		EmailStatus: statusCounts{
 			DryRun:     counts["dry_run"],
 			Classified: counts["classified"],
 			Applied:    counts["applied"],
 		},
 	})
+}
+
+func processingStatus(run storagemodels.ScanRun, counts map[string]int) string {
+	processed := counts["dry_run"] + counts["classified"] + counts["applied"]
+	if run.TotalProcessed == 0 {
+		return "not_started"
+	}
+	if processed >= run.TotalProcessed {
+		return "complete"
+	}
+	return "processing"
 }
 
 func writeJSON(w http.ResponseWriter, statusCode int, payload any) {

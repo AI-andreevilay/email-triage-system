@@ -133,7 +133,15 @@ The scan request returns after the scan run is accepted. Use the returned `run_i
 curl http://localhost:8080/scans/1
 ```
 
-The response includes enqueue counters (`total_found`, `total_processed`, `total_failed`) and downstream email status counters (`dry_run`, `classified`, `applied`).
+The response includes enqueue counters (`total_found`, `total_processed`, `total_failed`), downstream email status counters (`dry_run`, `classified`, `applied`), and a derived `processing_status`.
+
+Override the configured Gmail query for one scan:
+
+```bash
+curl -X POST http://localhost:8080/scans \
+  -H "Content-Type: application/json" \
+  -d '{"mode":"dry_run","query":"-in:trash -in:spam"}'
+```
 
 Stop the stack:
 

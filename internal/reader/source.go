@@ -43,6 +43,13 @@ func NewSource(source string, mock *MockReader, gmailClient *gmail.Client, maxRe
 	}, nil
 }
 
+func (s *Source) WithQuery(query string) (*Source, error) {
+	if s == nil {
+		return nil, errors.New("email source is not configured")
+	}
+	return NewSource(s.source, s.mock, s.gmail, s.maxResults, query)
+}
+
 func (s *Source) ListMessages(ctx context.Context, userID string) ([]Message, error) {
 	result := make([]Message, 0)
 	err := s.IterateMessages(ctx, userID, func(batch []Message) error {
