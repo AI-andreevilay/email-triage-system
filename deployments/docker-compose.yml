@@ -49,6 +49,7 @@ services:
       GMAIL_USER_ID: "${GMAIL_USER_ID:-me}"
       GMAIL_READ_MAX_RESULTS: "${GMAIL_READ_MAX_RESULTS:-100}"
       GMAIL_READ_QUERY: "${GMAIL_READ_QUERY:-in:inbox -in:trash}"
+      LABEL_WORKER_CONCURRENCY: "${LABEL_WORKER_CONCURRENCY:-4}"
     depends_on:
       postgres:
         condition: service_healthy

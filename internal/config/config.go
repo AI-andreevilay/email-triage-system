@@ -11,11 +11,12 @@ type Config struct {
 	RabbitMQURL string
 	EmailSource string
 
-	GmailCredentialsFile string
-	GmailTokenFile       string
-	GmailUserID          string
-	GmailReadMaxResults  int64
-	GmailReadQuery       string
+	GmailCredentialsFile   string
+	GmailTokenFile         string
+	GmailUserID            string
+	GmailReadMaxResults    int64
+	GmailReadQuery         string
+	LabelWorkerConcurrency int
 }
 
 func Load() Config {
@@ -28,16 +29,18 @@ func Load() Config {
 	gmailUserID := getEnv("GMAIL_USER_ID", "me")
 	gmailReadMaxResults := getEnvInt64("GMAIL_READ_MAX_RESULTS", 100)
 	gmailReadQuery := getEnv("GMAIL_READ_QUERY", "in:inbox -in:trash")
+	labelWorkerConcurrency := getEnvInt("LABEL_WORKER_CONCURRENCY", 4)
 	return Config{
-		HTTPPort:             port,
-		PostgresURL:          postgresURL,
-		RabbitMQURL:          rabbitMQURL,
-		EmailSource:          emailSource,
-		GmailCredentialsFile: gmailCredentialsFile,
-		GmailTokenFile:       gmailTokenFile,
-		GmailUserID:          gmailUserID,
-		GmailReadMaxResults:  gmailReadMaxResults,
-		GmailReadQuery:       gmailReadQuery,
+		HTTPPort:               port,
+		PostgresURL:            postgresURL,
+		RabbitMQURL:            rabbitMQURL,
+		EmailSource:            emailSource,
+		GmailCredentialsFile:   gmailCredentialsFile,
+		GmailTokenFile:         gmailTokenFile,
+		GmailUserID:            gmailUserID,
+		GmailReadMaxResults:    gmailReadMaxResults,
+		GmailReadQuery:         gmailReadQuery,
+		LabelWorkerConcurrency: labelWorkerConcurrency,
 	}
 }
 
@@ -62,4 +65,12 @@ func getEnvInt64(key string, fallback int64) int64 {
 		return fallback
 	}
 	return parsed
+}
+
+func getEnvInt(key string, fallback int) int {
+	parsed := getEnvInt64(key, int64(fallback))
+	if parsed > int64(^uint(0)>>1) {
+		return fallback
+	}
+	return int(parsed)
 }

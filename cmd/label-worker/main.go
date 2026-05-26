@@ -39,7 +39,7 @@ func main() {
 		log.Fatal(fmt.Errorf("init gmail client: %w", err))
 	}
 
-	worker, err := consumer.NewLabelWorker(pg, mq, gmailClient)
+	worker, err := consumer.NewLabelWorker(pg, mq, gmailClient, cfg.LabelWorkerConcurrency)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	log.Println("label-worker started")
+	log.Printf("label-worker started with concurrency=%d", cfg.LabelWorkerConcurrency)
 	if err := worker.Run(ctx); err != nil {
 		log.Fatal(err)
 	}

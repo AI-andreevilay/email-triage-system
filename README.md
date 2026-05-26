@@ -178,6 +178,7 @@ Important defaults:
 - `HTTP_PORT=8080`
 - `GMAIL_READ_QUERY=in:inbox -in:trash`
 - `GMAIL_READ_MAX_RESULTS=100`
+- `LABEL_WORKER_CONCURRENCY=4`
 
 ## Tests
 
