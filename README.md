@@ -4,7 +4,7 @@ Backend pet project for automatic Gmail email triage and labeling.
 
 ## Current Scope (Iteration 10)
 
-- Project skeleton for API/workers/migrator
+- Project skeleton for API/workers
 - PostgreSQL in Docker Compose
 - Environment-based config loading
 - Healthcheck endpoint
@@ -35,7 +35,7 @@ Backend pet project for automatic Gmail email triage and labeling.
 - OAuth CLI command to connect your Gmail account and save token
 - Docker image build via root `Dockerfile`
 - Kubernetes manifests live in private `k3s-deploy` repo (see `../k3s-deploy/k3s/email-triage-system` in this workspace)
-- Kubernetes migrator `Job` for applying SQL migrations in cluster
+- Kubernetes migration `Job` for applying SQL migrations in cluster with `golang-migrate`
 - Label worker deployment is included, but scaled to `0` by default
 - Infra services (`postgres`, `rabbitmq`) run in dedicated namespace `infra`
 - App uses project-scoped infra credentials from Kubernetes `Secret` (`email-triage-secrets`)
@@ -58,7 +58,7 @@ Backend pet project for automatic Gmail email triage and labeling.
    ```bash
    make run
    ```
-   This builds the app image, starts PostgreSQL and RabbitMQ, applies migrations, then runs:
+   This builds the app image, starts PostgreSQL and RabbitMQ, applies migrations with `golang-migrate`, then runs:
    - API server
    - classifier worker
    - label worker
@@ -82,6 +82,8 @@ make logs      # follow Docker Compose logs
 make run-infra # start only PostgreSQL + RabbitMQ
 make install   # install local Go dependencies for non-Docker runs
 ```
+
+The migration job uses `golang-migrate` and its default `schema_migrations` table.
 
 The full stack starts `label-worker`, so local Gmail files must exist at `secrets/gmail_credentials.json` and `secrets/gmail_token.json`.
 

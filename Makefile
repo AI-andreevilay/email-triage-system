@@ -28,7 +28,7 @@ logs: ## follow local Docker Compose logs
 
 .PHONY: migrate
 migrate: ## apply SQL migrations
-	go run ./cmd/migrator
+	docker compose -f $(COMPOSE_FILE) run --rm migrator
 
 .PHONY: run-api
 run-api: ## run API server

@@ -33,11 +33,16 @@ services:
       context: ..
       dockerfile: Dockerfile
     container_name: email-triage-migrator
-    command: ["/app/migrator"]
+    command:
+      - "/app/migrate"
+      - "-path"
+      - "/app/migrations"
+      - "-database"
+      - "postgres://postgres:postgres@postgres:5432/email_triage?sslmode=disable"
+      - "up"
     environment: &app_environment
       POSTGRES_URL: "postgres://postgres:postgres@postgres:5432/email_triage?sslmode=disable"
       RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
-      MIGRATIONS_DIR: "/app/migrations"
       EMAIL_SOURCE: "${EMAIL_SOURCE:-mock}"
       GMAIL_CREDENTIALS_FILE: "/app/secrets/gmail_credentials.json"
       GMAIL_TOKEN_FILE: "/app/secrets/gmail_token.json"

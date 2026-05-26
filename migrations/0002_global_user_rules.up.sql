@@ -1,7 +1,7 @@
 ALTER TABLE user_rules
     ALTER COLUMN user_id DROP NOT NULL;
 
-CREATE UNIQUE INDEX user_rules_unique_rule
+CREATE UNIQUE INDEX IF NOT EXISTS user_rules_unique_rule
     ON user_rules (user_id, rule_type, operator, rule_value, target_label)
     NULLS NOT DISTINCT;
 
