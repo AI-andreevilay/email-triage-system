@@ -23,6 +23,7 @@ profile.cov
 # Go workspace file
 go.work
 go.work.sum
+.gocache/
 
 # env file
 .env
@@ -30,7 +31,7 @@ go.work.sum
 .codex
 
 # Editor/IDE
-# .idea/
+.idea/
 # .vscode/
 
 # Local Gmail OAuth secrets

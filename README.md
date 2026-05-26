@@ -1,165 +1,203 @@
 # Email Triage System
 
-Backend pet project for automatic Gmail email triage and labeling.
+Email Triage System is a Go backend project for explainable Gmail triage. It reads email metadata, classifies messages with database-backed rules, stores scan results, and can apply Gmail labels through an asynchronous worker pipeline.
 
-## Current Scope (Iteration 10)
+This is a personal backend engineering project, not a production SaaS product. The focus is event-driven architecture, rule precedence, idempotent processing, and privacy-conscious integration with Gmail.
 
-- Project skeleton for API/workers
-- PostgreSQL in Docker Compose
-- Environment-based config loading
-- Healthcheck endpoint
-- SQL migrations
-- Minimal PostgreSQL storage layer
-- Mock Gmail reader
-- Rule-based classifier with categories:
-  - Job
-  - Transactions
-  - Security
-  - Promo
-  - Social
-  - Unknown
-- User rules support in classifier:
-  - global rules apply to every scan
-  - user-specific rules override matching global rules
-  - rules are managed in PostgreSQL instead of compiled into the classifier
-- Manual full scan endpoint: `POST /scans`
-  - Publishes raw email events to RabbitMQ queue `email.raw`
-  - For Gmail source, scan is paginated and processed in batches
-- RabbitMQ in local Docker Compose
-- Classifier worker consumes `email.raw`, classifies emails, and stores metadata in PostgreSQL
-- Classifier worker publishes `email.classified` for apply mode
-- Label worker consumes `email.classified` and applies labels via Gmail API
-- Label worker removes message from Inbox after successful apply
-- Label worker updates `applied_label` and `status=applied` in PostgreSQL on success
-- Real Gmail reader (optional via config) for scan source
-- OAuth CLI command to connect your Gmail account and save token
-- Docker image build via root `Dockerfile`
-- Kubernetes manifests live in private `k3s-deploy` repo (see `../k3s-deploy/k3s/email-triage-system` in this workspace)
-- Kubernetes migration `Job` for applying SQL migrations in cluster with `golang-migrate`
-- Label worker deployment is included, but scaled to `0` by default
-- Infra services (`postgres`, `rabbitmq`) run in dedicated namespace `infra`
-- App uses project-scoped infra credentials from Kubernetes `Secret` (`email-triage-secrets`)
+## Why This Exists
 
-## Tech Stack
+Gmail filters are good for stable sender and subject rules. This project explores the layer around those filters:
 
-- Go
-- PostgreSQL
-- RabbitMQ
-- Docker Compose
-- Kubernetes
+- dry-run scans before labels are applied;
+- explainable classification reasons;
+- global and user-specific rule precedence;
+- persisted scan history for review and debugging;
+- a worker-based pipeline that separates reading, classification, and label application.
 
-## Run Locally
+For a single personal inbox, Gmail filters may be enough. This repository is best read as a backend case study and experimentation environment.
 
-1. Show available commands:
-   ```bash
-   make help
-   ```
-2. Start the full local Docker Compose stack:
-   ```bash
-   make run
-   ```
-   This builds the app image, starts PostgreSQL and RabbitMQ, applies migrations with `golang-migrate`, then runs:
-   - API server
-   - classifier worker
-   - label worker
-3. Check health:
-   ```bash
-   make healthz
-   ```
-4. Trigger scan:
-   ```bash
-   make scan-dry-run
-   ```
-5. Stop the stack:
-   ```bash
-   make stop
-   ```
+## Features
 
-Useful local commands:
+- Gmail reader with OAuth token support.
+- Mock reader for local development and tests.
+- Rule-based classifier with labels:
+  - `Job`
+  - `Transactions`
+  - `Security`
+  - `Promo`
+  - `Social`
+  - `Unknown`
+- PostgreSQL-backed User Rules.
+- Global Rules and User-Specific Rules.
+- Priority and specificity scoring.
+- Manual scan endpoint with `dry_run` and `apply` modes.
+- RabbitMQ event flow:
+  - `email.raw`
+  - `email.classified`
+- Gmail label worker for apply mode.
+- Idempotent storage by `user_id + gmail_message_id`.
+- No raw email body persistence.
 
-```bash
-make logs      # follow Docker Compose logs
-make run-infra # start only PostgreSQL + RabbitMQ
-make install   # install local Go dependencies for non-Docker runs
+## Architecture
+
+```mermaid
+flowchart LR
+    Client[Client] --> API[API Server]
+    API --> Reader[Email Reader]
+    Reader --> API
+    API --> RawQueue[RabbitMQ: email.raw]
+    RawQueue --> Classifier[Classifier Worker]
+    Classifier --> Rules[(PostgreSQL Rules)]
+    Classifier --> Results[(PostgreSQL Results)]
+    Classifier --> ClassifiedQueue[RabbitMQ: email.classified]
+    ClassifiedQueue --> LabelWorker[Label Worker]
+    LabelWorker --> Gmail[Gmail API]
 ```
 
-The migration job uses `golang-migrate` and its default `schema_migrations` table.
+The API starts scans and publishes raw message events. The classifier worker loads rules, assigns a label, stores the result, and publishes apply events when requested. The label worker applies Gmail labels and archives messages only in `apply` mode.
 
-The full stack starts `label-worker`, so local Gmail files must exist at `secrets/gmail_credentials.json` and `secrets/gmail_token.json`.
+## Rule Model
 
-## User Rules (MVP)
+Rules are stored in PostgreSQL instead of compiled into the classifier.
 
-`user_rules` fields used by classifier:
+Supported fields:
 
-- `user_id`: `NULL` for global rules, concrete user id for user-specific rules
-- `rule_type`: `sender_email` | `sender_domain` | `subject` | `body` | `any`
-- `operator`: `equals` | `contains`
-- `rule_value`: value to match
-- `target_label`: `Job` | `Transactions` | `Security` | `Promo` | `Social` | `Unknown`
-- `priority`: higher value = higher precedence within the same rule scope
-- `enabled`: `true`/`false`
+- `sender_email`
+- `sender_domain`
+- `subject`
+- `body`
+- `any`
 
-User-specific rules always override matching global rules. Priority is only compared inside the same scope.
+Supported operators:
 
-Quick SQL examples:
+- `equals`
+- `contains`
 
-```bash
-psql "postgres://postgres:postgres@localhost:5432/email_triage?sslmode=disable" -c "
+User-Specific Rules override Global Rules. Within the same scope, higher priority wins, with a small specificity bonus for more precise fields and `equals` matches.
+
+Example:
+
+```sql
 INSERT INTO user_rules (user_id, rule_type, operator, rule_value, target_label, enabled, priority)
 VALUES
-  (NULL,'sender_domain','contains','linkedin.com','Job',true,300),
-  ('user_1','sender_domain','equals','linkedin.com','Job',true,300),
-  ('user_1','subject','contains','receipt','Transactions',true,250),
-  ('user_1','sender_email','equals','no-reply@accounts.google.com','Security',true,350);
-"
+  (NULL, 'sender_domain', 'contains', 'linkedin.com', 'Job', true, 300),
+  (NULL, 'subject', 'contains', 'receipt', 'Transactions', true, 250),
+  (NULL, 'sender_email', 'equals', 'no-reply@accounts.google.com', 'Security', true, 350);
 ```
 
-Then trigger scan again:
+## Privacy Model
+
+- OAuth credentials and Gmail tokens are local files and are ignored by git.
+- Email body snippets may be used in memory for classification.
+- Raw email body content is not stored.
+- Persisted data is limited to metadata, classification output, confidence, status, and reason.
+- Attachments are not part of the current pipeline.
+
+## Local Setup
+
+Requirements:
+
+- Go 1.24+
+- Docker and Docker Compose
+- Gmail API credentials only if using the real Gmail reader
+
+Show available commands:
 
 ```bash
-curl -X POST http://localhost:8080/scans \
-  -H "Content-Type: application/json" \
-  -d '{"mode":"dry_run"}'
+make help
 ```
 
-## Architecture (Current)
+Start the full local stack:
 
-Client -> API -> Reader -> RabbitMQ (`email.raw`) -> Classifier Worker -> PostgreSQL -> RabbitMQ (`email.classified`) -> Label Worker (Gmail apply) -> PostgreSQL
+```bash
+make run
+```
 
-Detailed notes: `docs/architecture.md`.
+This starts PostgreSQL, RabbitMQ, migrations, API server, classifier worker, and label worker.
 
-## Run on Kubernetes (Iteration 10)
+Check health:
 
-Kubernetes manifests were moved to the private `k3s-deploy` repo: see `../k3s-deploy/README.md`.
+```bash
+make healthz
+```
 
-## Gmail Connection (for real reader)
+Trigger a dry-run scan:
 
-1. In Google Cloud Console:
-   - Enable Gmail API
-   - Create OAuth Client ID (`Desktop app`)
-   - Download credentials JSON
-2. Save it as:
-   ```bash
+```bash
+make scan-dry-run
+```
+
+Stop the stack:
+
+```bash
+make stop
+```
+
+## Gmail Setup
+
+The mock reader is the default. To use Gmail:
+
+1. Enable the Gmail API in Google Cloud.
+2. Create an OAuth Client ID for a desktop app.
+3. Save the downloaded credentials as:
+
+   ```text
    secrets/gmail_credentials.json
    ```
-3. Run OAuth flow:
+
+4. Run the OAuth flow:
+
    ```bash
    make gmail-auth
    ```
-   Command starts local callback on `http://localhost:8090/oauth2/callback`.
-   After Google consent, token is saved automatically.
-4. Start API with Gmail source:
-   ```bash
-    EMAIL_SOURCE=gmail \
-    GMAIL_CREDENTIALS_FILE=secrets/gmail_credentials.json \
-    GMAIL_TOKEN_FILE=secrets/gmail_token.json \
-    GMAIL_READ_MAX_RESULTS=100 \
-    GMAIL_READ_QUERY='in:inbox -in:trash' \
-    go run ./cmd/api-server
-    ```
-5. Trigger dry-run scan:
-   ```bash
-   curl -X POST http://localhost:8080/scans \
-     -H "Content-Type: application/json" \
-     -d '{"mode":"dry_run"}'
+
+5. The token is saved to:
+
+   ```text
+   secrets/gmail_token.json
    ```
+
+6. Start the API with Gmail as the source:
+
+   ```bash
+   EMAIL_SOURCE=gmail \
+   GMAIL_CREDENTIALS_FILE=secrets/gmail_credentials.json \
+   GMAIL_TOKEN_FILE=secrets/gmail_token.json \
+   GMAIL_READ_MAX_RESULTS=100 \
+   GMAIL_READ_QUERY='in:inbox -in:trash' \
+   go run ./cmd/api-server
+   ```
+
+## Configuration
+
+See `.env.example` for supported environment variables.
+
+Important defaults:
+
+- `EMAIL_SOURCE=mock`
+- `HTTP_PORT=8080`
+- `GMAIL_READ_QUERY=in:inbox -in:trash`
+- `GMAIL_READ_MAX_RESULTS=100`
+
+## Tests
+
+```bash
+go test ./...
+```
+
+Unit tests do not require Gmail, PostgreSQL, or RabbitMQ.
+
+## Limitations
+
+- Classification is rule-based only; there is no LLM or ML classifier.
+- The current label set is experimental.
+- `Unknown` is the fallback label when no rule matches.
+- `Transactions` may overlap with Gmail's built-in purchase/order categorization.
+- There is no UI or authentication layer.
+- Kubernetes manifests are intentionally not included in this public repository.
+
+## Documentation
+
+- [Architecture](docs/architecture.md)
+- [ADR 0001: Database-managed Global Rules](docs/adr/0001-database-managed-global-rules.md)
+- [Publication Hygiene Plan](docs/publication-hygiene-plan.md)
