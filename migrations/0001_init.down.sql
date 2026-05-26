@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS user_rules;
+DROP TABLE IF EXISTS scan_runs;
+DROP TABLE IF EXISTS email_messages;
