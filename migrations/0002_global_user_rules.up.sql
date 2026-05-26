@@ -1,0 +1,61 @@
+ALTER TABLE user_rules
+    ALTER COLUMN user_id DROP NOT NULL;
+
+CREATE UNIQUE INDEX user_rules_unique_rule
+    ON user_rules (user_id, rule_type, operator, rule_value, target_label)
+    NULLS NOT DISTINCT;
+
+INSERT INTO user_rules (user_id, rule_type, operator, rule_value, target_label, enabled, priority)
+VALUES
+    ('user_1', 'sender_email', 'equals', 'contact.center@permatabank.co.id', 'Transactions', TRUE, 260),
+    (NULL, 'sender_domain', 'contains', 'google.com', 'Security', TRUE, 220),
+    (NULL, 'subject', 'contains', 'sign-in', 'Security', TRUE, 210),
+    (NULL, 'any', 'contains', 'verification code', 'Security', TRUE, 210),
+    (NULL, 'any', 'contains', 'otp', 'Security', TRUE, 210),
+    (NULL, 'any', 'contains', '2fa', 'Security', TRUE, 210),
+    (NULL, 'any', 'contains', 'authenticator', 'Security', TRUE, 210),
+    (NULL, 'any', 'contains', 'lock your account', 'Security', TRUE, 210),
+    (NULL, 'any', 'contains', 'если это не были вы', 'Security', TRUE, 210),
+    (NULL, 'any', 'contains', 'вошла в систему', 'Security', TRUE, 205),
+    (NULL, 'any', 'contains', 'подтвердить адрес эл. почты', 'Security', TRUE, 205),
+    (NULL, 'sender_domain', 'contains', 'bank.com', 'Transactions', TRUE, 180),
+    (NULL, 'any', 'contains', 'transaction', 'Transactions', TRUE, 170),
+    (NULL, 'any', 'contains', 'payment', 'Transactions', TRUE, 170),
+    (NULL, 'any', 'contains', 'invoice', 'Transactions', TRUE, 170),
+    (NULL, 'any', 'contains', 'receipt', 'Transactions', TRUE, 170),
+    (NULL, 'any', 'contains', 'card', 'Transactions', TRUE, 160),
+    (NULL, 'any', 'contains', 'qr pay', 'Transactions', TRUE, 160),
+    (NULL, 'any', 'contains', 'thank you for applying', 'Job', TRUE, 180),
+    (NULL, 'any', 'contains', 'your application has been received', 'Job', TRUE, 180),
+    (NULL, 'any', 'contains', 'we have received your application', 'Job', TRUE, 180),
+    (NULL, 'any', 'contains', 'thank you for taking the time to apply', 'Job', TRUE, 180),
+    (NULL, 'any', 'contains', 'talent acquisition team', 'Job', TRUE, 175),
+    (NULL, 'any', 'contains', 'will not be proceeding at this time', 'Job', TRUE, 175),
+    (NULL, 'any', 'contains', 'hiring team', 'Job', TRUE, 170),
+    (NULL, 'any', 'contains', 'backend engineer', 'Job', TRUE, 170),
+    (NULL, 'any', 'contains', 'applicant', 'Job', TRUE, 165),
+    (NULL, 'any', 'contains', 'position', 'Job', TRUE, 155),
+    (NULL, 'any', 'contains', 'role', 'Job', TRUE, 150),
+    (NULL, 'any', 'contains', 'interview', 'Job', TRUE, 150),
+    (NULL, 'any', 'contains', 'recruiter', 'Job', TRUE, 150),
+    (NULL, 'any', 'contains', 'job', 'Job', TRUE, 140),
+    (NULL, 'any', 'contains', 'opportunity', 'Job', TRUE, 140),
+    (NULL, 'any', 'contains', 'vacancy', 'Job', TRUE, 140),
+    (NULL, 'any', 'contains', 'resume', 'Job', TRUE, 130),
+    (NULL, 'any', 'contains', 'subscription will end', 'Promo', TRUE, 145),
+    (NULL, 'any', 'contains', 'renew', 'Promo', TRUE, 140),
+    (NULL, 'any', 'contains', 'upgrade', 'Promo', TRUE, 140),
+    (NULL, 'any', 'contains', 'keep your', 'Promo', TRUE, 130),
+    (NULL, 'any', 'contains', 'sale', 'Promo', TRUE, 120),
+    (NULL, 'any', 'contains', 'discount', 'Promo', TRUE, 120),
+    (NULL, 'any', 'contains', 'promo', 'Promo', TRUE, 120),
+    (NULL, 'any', 'contains', 'coupon', 'Promo', TRUE, 120),
+    (NULL, 'any', 'contains', 'offer', 'Promo', TRUE, 110),
+    (NULL, 'any', 'contains', 'deal', 'Promo', TRUE, 110),
+    (NULL, 'any', 'contains', '% off', 'Promo', TRUE, 110),
+    (NULL, 'any', 'contains', 'notification', 'Social', TRUE, 100),
+    (NULL, 'any', 'contains', 'friend', 'Social', TRUE, 100),
+    (NULL, 'any', 'contains', 'comment', 'Social', TRUE, 100),
+    (NULL, 'any', 'contains', 'mention', 'Social', TRUE, 100),
+    (NULL, 'any', 'contains', 'invitation', 'Social', TRUE, 100)
+ON CONFLICT DO NOTHING;

@@ -175,7 +175,15 @@ func toClassificationRules(in []storagemodels.UserRule) []rules.Rule {
 			TargetLabel: rule.TargetLabel,
 			Enabled:     rule.Enabled,
 			Priority:    rule.Priority,
+			Scope:       ruleScope(rule),
 		})
 	}
 	return result
+}
+
+func ruleScope(rule storagemodels.UserRule) string {
+	if rule.UserID == nil {
+		return rules.ScopeGlobal
+	}
+	return rules.ScopeUserSpecific
 }

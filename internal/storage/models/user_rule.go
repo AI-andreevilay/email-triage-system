@@ -2,7 +2,7 @@ package models
 
 type UserRule struct {
 	ID          int64
-	UserID      string
+	UserID      *string
 	RuleType    string
 	Operator    string
 	RuleValue   string

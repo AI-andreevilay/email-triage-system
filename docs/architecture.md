@@ -74,15 +74,14 @@ Client -> API -> Reader -> Broker -> Classifier Worker -> PostgreSQL -> Label Wo
 ### 5.4 Classifier
 - Explainable rule-based classification (MVP)
 - Categories: Job, Transactions, Security, Promo, Social, Unknown
-- Both default rules and user-defined rules are evaluated for each message
+- Global rules and user-specific rules are loaded from PostgreSQL for each message
 - Supported operators (MVP): `equals`, `contains`
 - Rule selection:
-  1. Match all applicable rules
-  2. Score each match (`priority + source_bonus + specificity_bonus`)
-  3. Highest score wins
-  4. User rule wins when priority is equal
-  5. More specific rule wins when priority and source are equal
-  6. Fallback label is `Unknown` when no rule matches
+  1. Match all applicable user-specific rules for the current user
+  2. If any user-specific rule matches, choose the best one by priority and specificity
+  3. Otherwise, match all applicable global rules
+  4. Choose the best global rule by priority and specificity
+  5. Fallback label is `Unknown` when no rule matches
 - Custom rule match inputs:
   - sender email
   - sender domain
@@ -144,7 +143,7 @@ Client -> API -> Reader -> Broker -> Classifier Worker -> PostgreSQL -> Label Wo
 
 ### user_rules
 - id
-- user_id
+- user_id (`NULL` for global rules)
 - rule_type
 - operator
 - rule_value
@@ -165,7 +164,7 @@ Current (Iteration 10):
 3. Gmail source is read page-by-page (batch size default: 100)
 4. API publishes one `email.raw` event per message to RabbitMQ
 5. Classifier worker consumes `email.raw`
-6. Worker classifies using default + user rules
+6. Worker classifies using global + user-specific rules
 7. Worker stores metadata and classification result in PostgreSQL
 8. For `apply` mode, classifier worker publishes `email.classified`
 9. Label worker consumes `email.classified`

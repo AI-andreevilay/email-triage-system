@@ -8,8 +8,25 @@ import (
 	"github.com/bzelijah/email-triage-system/internal/rules"
 )
 
-func TestClassifierDefaultRules(t *testing.T) {
+func TestClassifierReturnsUnknownWithoutRules(t *testing.T) {
 	c := New()
+
+	result := c.Classify(reader.Message{
+		From:        "security@google.com",
+		Subject:     "New sign-in detected",
+		BodySnippet: "We noticed a new sign-in to your account.",
+	}, nil)
+	if result.Label != LabelUnknown {
+		t.Fatalf("label = %s, want %s", result.Label, LabelUnknown)
+	}
+	if result.Reason != "no_matching_rule" {
+		t.Fatalf("reason = %s, want no_matching_rule", result.Reason)
+	}
+}
+
+func TestClassifierGlobalRules(t *testing.T) {
+	c := New()
+	globalRules := seededGlobalRulesForTest()
 
 	tests := []struct {
 		name      string
@@ -74,7 +91,7 @@ func TestClassifierDefaultRules(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := c.Classify(tt.message, nil)
+			result := c.Classify(tt.message, globalRules)
 			if result.Label != tt.wantLabel {
 				t.Fatalf("label = %s, want %s", result.Label, tt.wantLabel)
 			}
@@ -85,7 +102,7 @@ func TestClassifierDefaultRules(t *testing.T) {
 	}
 }
 
-func TestClassifierUserRulePreferredWhenPriorityEqual(t *testing.T) {
+func TestClassifierUserSpecificRulePreferredOverGlobalRule(t *testing.T) {
 	c := New()
 
 	message := reader.Message{
@@ -96,12 +113,22 @@ func TestClassifierUserRulePreferredWhenPriorityEqual(t *testing.T) {
 
 	userRules := []rules.Rule{
 		{
+			RuleType:    rules.RuleTypeAny,
+			Operator:    rules.OperatorContains,
+			RuleValue:   "sale",
+			TargetLabel: LabelPromo,
+			Enabled:     true,
+			Priority:    999,
+			Scope:       rules.ScopeGlobal,
+		},
+		{
 			RuleType:    rules.RuleTypeSenderEmail,
 			Operator:    rules.OperatorEquals,
 			RuleValue:   "newsletter@store.com",
 			TargetLabel: LabelTransactions,
 			Enabled:     true,
-			Priority:    120,
+			Priority:    1,
+			Scope:       rules.ScopeUserSpecific,
 		},
 	}
 
@@ -109,12 +136,12 @@ func TestClassifierUserRulePreferredWhenPriorityEqual(t *testing.T) {
 	if result.Label != LabelTransactions {
 		t.Fatalf("label = %s, want %s", result.Label, LabelTransactions)
 	}
-	if !strings.Contains(result.Reason, "source=user") {
-		t.Fatalf("reason = %s, expected user source", result.Reason)
+	if !strings.Contains(result.Reason, "scope=user_specific") {
+		t.Fatalf("reason = %s, expected user-specific scope", result.Reason)
 	}
 }
 
-func TestClassifierHigherPriorityWinsRegardlessOfSource(t *testing.T) {
+func TestClassifierHigherPriorityWinsWithinSameScope(t *testing.T) {
 	c := New()
 
 	message := reader.Message{
@@ -131,6 +158,16 @@ func TestClassifierHigherPriorityWinsRegardlessOfSource(t *testing.T) {
 			TargetLabel: LabelSocial,
 			Enabled:     true,
 			Priority:    50,
+			Scope:       rules.ScopeGlobal,
+		},
+		{
+			RuleType:    rules.RuleTypeSenderDomain,
+			Operator:    rules.OperatorContains,
+			RuleValue:   "bank.com",
+			TargetLabel: LabelTransactions,
+			Enabled:     true,
+			Priority:    180,
+			Scope:       rules.ScopeGlobal,
 		},
 	}
 
@@ -157,6 +194,7 @@ func TestClassifierSpecificityWhenPriorityAndSourceEqual(t *testing.T) {
 			TargetLabel: LabelPromo,
 			Enabled:     true,
 			Priority:    100,
+			Scope:       rules.ScopeUserSpecific,
 		},
 		{
 			RuleType:    rules.RuleTypeSenderEmail,
@@ -165,6 +203,7 @@ func TestClassifierSpecificityWhenPriorityAndSourceEqual(t *testing.T) {
 			TargetLabel: LabelSecurity,
 			Enabled:     true,
 			Priority:    100,
+			Scope:       rules.ScopeUserSpecific,
 		},
 	}
 
@@ -176,6 +215,17 @@ func TestClassifierSpecificityWhenPriorityAndSourceEqual(t *testing.T) {
 
 func TestClassifierRealWorldJobMails(t *testing.T) {
 	c := New()
+	globalRules := seededGlobalRulesForTest()
+	userRules := append([]rules.Rule{}, globalRules...)
+	userRules = append(userRules, rules.Rule{
+		RuleType:    rules.RuleTypeSenderEmail,
+		Operator:    rules.OperatorEquals,
+		RuleValue:   "contact.center@permatabank.co.id",
+		TargetLabel: LabelTransactions,
+		Enabled:     true,
+		Priority:    260,
+		Scope:       rules.ScopeUserSpecific,
+	})
 
 	tests := []struct {
 		name      string
@@ -258,10 +308,65 @@ func TestClassifierRealWorldJobMails(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := c.Classify(tt.message, nil)
+			result := c.Classify(tt.message, userRules)
 			if result.Label != tt.wantLabel {
 				t.Fatalf("label = %s, want %s, reason=%s", result.Label, tt.wantLabel, result.Reason)
 			}
 		})
+	}
+}
+
+func seededGlobalRulesForTest() []rules.Rule {
+	return []rules.Rule{
+		{RuleType: rules.RuleTypeSenderDomain, Operator: rules.OperatorContains, RuleValue: "google.com", TargetLabel: LabelSecurity, Enabled: true, Priority: 220, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeSubject, Operator: rules.OperatorContains, RuleValue: "sign-in", TargetLabel: LabelSecurity, Enabled: true, Priority: 210, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "verification code", TargetLabel: LabelSecurity, Enabled: true, Priority: 210, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "otp", TargetLabel: LabelSecurity, Enabled: true, Priority: 210, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "2fa", TargetLabel: LabelSecurity, Enabled: true, Priority: 210, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "authenticator", TargetLabel: LabelSecurity, Enabled: true, Priority: 210, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "lock your account", TargetLabel: LabelSecurity, Enabled: true, Priority: 210, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "если это не были вы", TargetLabel: LabelSecurity, Enabled: true, Priority: 210, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "вошла в систему", TargetLabel: LabelSecurity, Enabled: true, Priority: 205, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "подтвердить адрес эл. почты", TargetLabel: LabelSecurity, Enabled: true, Priority: 205, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeSenderDomain, Operator: rules.OperatorContains, RuleValue: "bank.com", TargetLabel: LabelTransactions, Enabled: true, Priority: 180, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "transaction", TargetLabel: LabelTransactions, Enabled: true, Priority: 170, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "payment", TargetLabel: LabelTransactions, Enabled: true, Priority: 170, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "invoice", TargetLabel: LabelTransactions, Enabled: true, Priority: 170, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "receipt", TargetLabel: LabelTransactions, Enabled: true, Priority: 170, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "card", TargetLabel: LabelTransactions, Enabled: true, Priority: 160, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "qr pay", TargetLabel: LabelTransactions, Enabled: true, Priority: 160, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "thank you for applying", TargetLabel: LabelJob, Enabled: true, Priority: 180, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "your application has been received", TargetLabel: LabelJob, Enabled: true, Priority: 180, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "we have received your application", TargetLabel: LabelJob, Enabled: true, Priority: 180, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "thank you for taking the time to apply", TargetLabel: LabelJob, Enabled: true, Priority: 180, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "talent acquisition team", TargetLabel: LabelJob, Enabled: true, Priority: 175, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "will not be proceeding at this time", TargetLabel: LabelJob, Enabled: true, Priority: 175, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "hiring team", TargetLabel: LabelJob, Enabled: true, Priority: 170, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "backend engineer", TargetLabel: LabelJob, Enabled: true, Priority: 170, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "applicant", TargetLabel: LabelJob, Enabled: true, Priority: 165, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "position", TargetLabel: LabelJob, Enabled: true, Priority: 155, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "role", TargetLabel: LabelJob, Enabled: true, Priority: 150, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "interview", TargetLabel: LabelJob, Enabled: true, Priority: 150, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "recruiter", TargetLabel: LabelJob, Enabled: true, Priority: 150, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "job", TargetLabel: LabelJob, Enabled: true, Priority: 140, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "opportunity", TargetLabel: LabelJob, Enabled: true, Priority: 140, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "vacancy", TargetLabel: LabelJob, Enabled: true, Priority: 140, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "resume", TargetLabel: LabelJob, Enabled: true, Priority: 130, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "subscription will end", TargetLabel: LabelPromo, Enabled: true, Priority: 145, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "renew", TargetLabel: LabelPromo, Enabled: true, Priority: 140, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "upgrade", TargetLabel: LabelPromo, Enabled: true, Priority: 140, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "keep your", TargetLabel: LabelPromo, Enabled: true, Priority: 130, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "sale", TargetLabel: LabelPromo, Enabled: true, Priority: 120, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "discount", TargetLabel: LabelPromo, Enabled: true, Priority: 120, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "promo", TargetLabel: LabelPromo, Enabled: true, Priority: 120, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "coupon", TargetLabel: LabelPromo, Enabled: true, Priority: 120, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "offer", TargetLabel: LabelPromo, Enabled: true, Priority: 110, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "deal", TargetLabel: LabelPromo, Enabled: true, Priority: 110, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "% off", TargetLabel: LabelPromo, Enabled: true, Priority: 110, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "notification", TargetLabel: LabelSocial, Enabled: true, Priority: 100, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "friend", TargetLabel: LabelSocial, Enabled: true, Priority: 100, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "comment", TargetLabel: LabelSocial, Enabled: true, Priority: 100, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "mention", TargetLabel: LabelSocial, Enabled: true, Priority: 100, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "invitation", TargetLabel: LabelSocial, Enabled: true, Priority: 100, Scope: rules.ScopeGlobal},
 	}
 }

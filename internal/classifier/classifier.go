@@ -18,11 +18,6 @@ const (
 	LabelUnknown      = "Unknown"
 )
 
-const (
-	sourceDefault = "default"
-	sourceUser    = "user"
-)
-
 type Result struct {
 	Label      string
 	Confidence float64
@@ -36,31 +31,44 @@ func New() *Classifier {
 }
 
 func (c *Classifier) Classify(message reader.Message, userRules []rules.Rule) Result {
-	candidates := make([]candidateRule, 0, len(defaultRules)+len(userRules))
-
-	for _, rule := range defaultRules {
-		candidates = append(candidates, candidateRule{Rule: rule, Source: sourceDefault})
-	}
+	candidates := make([]candidateRule, 0, len(userRules))
 	for _, rule := range userRules {
 		if !rule.Enabled {
 			continue
 		}
-		candidates = append(candidates, candidateRule{Rule: rule, Source: sourceUser})
+		scope := normalizeScope(rule.Scope)
+		if scope == "" {
+			continue
+		}
+		candidates = append(candidates, candidateRule{Rule: rule, Scope: scope})
 	}
 
 	parts := extractMessageParts(message)
-	var best *matchResult
+	var bestUserSpecific *matchResult
+	var bestGlobal *matchResult
 	for _, candidate := range candidates {
 		match, ok := matchCandidate(parts, candidate)
 		if !ok {
 			continue
 		}
-		if best == nil || match.Score > best.Score {
-			copied := match
-			best = &copied
+		switch candidate.Scope {
+		case rules.ScopeUserSpecific:
+			if bestUserSpecific == nil || match.Score > bestUserSpecific.Score {
+				copied := match
+				bestUserSpecific = &copied
+			}
+		case rules.ScopeGlobal:
+			if bestGlobal == nil || match.Score > bestGlobal.Score {
+				copied := match
+				bestGlobal = &copied
+			}
 		}
 	}
 
+	best := bestUserSpecific
+	if best == nil {
+		best = bestGlobal
+	}
 	if best == nil {
 		return Result{
 			Label:      LabelUnknown,
@@ -77,8 +85,8 @@ func (c *Classifier) Classify(message reader.Message, userRules []rules.Rule) Re
 }
 
 type candidateRule struct {
-	Rule   rules.Rule
-	Source string
+	Rule  rules.Rule
+	Scope string
 }
 
 type messageParts struct {
@@ -159,13 +167,13 @@ func matchCandidate(parts messageParts, candidate candidateRule) (matchResult, b
 		return matchResult{}, false
 	}
 
-	score := scoreRule(rule.Priority, candidate.Source, specificityBonus(rule.RuleType, operator))
+	score := scoreRule(rule.Priority, specificityBonus(rule.RuleType, operator))
 	return matchResult{
 		TargetLabel: rule.TargetLabel,
 		Score:       score,
 		Reason: fmt.Sprintf(
-			"source=%s rule_type=%s operator=%s value=%s score=%d",
-			candidate.Source,
+			"scope=%s rule_type=%s operator=%s value=%s score=%d",
+			candidate.Scope,
 			rule.RuleType,
 			operator,
 			rule.RuleValue,
@@ -174,12 +182,8 @@ func matchCandidate(parts messageParts, candidate candidateRule) (matchResult, b
 	}, true
 }
 
-func scoreRule(priority int, source string, specificity int) int {
-	sourceBonus := 0
-	if source == sourceUser {
-		sourceBonus = 100
-	}
-	return priority*1000 + sourceBonus + specificity
+func scoreRule(priority int, specificity int) int {
+	return priority*1000 + specificity
 }
 
 func specificityBonus(ruleType, operator string) int {
@@ -220,6 +224,17 @@ func normalize(value string) string {
 	return strings.ToLower(strings.TrimSpace(value))
 }
 
+func normalizeScope(scope string) string {
+	switch normalize(scope) {
+	case "", rules.ScopeUserSpecific:
+		return rules.ScopeUserSpecific
+	case rules.ScopeGlobal:
+		return rules.ScopeGlobal
+	default:
+		return ""
+	}
+}
+
 func extractSenderEmail(from string) string {
 	from = strings.TrimSpace(from)
 	if from == "" {
@@ -237,58 +252,4 @@ func extractSenderDomain(senderEmail string) string {
 		return ""
 	}
 	return parts[1]
-}
-
-var defaultRules = []rules.Rule{
-	{RuleType: rules.RuleTypeSenderEmail, Operator: rules.OperatorEquals, RuleValue: "contact.center@permatabank.co.id", TargetLabel: LabelTransactions, Enabled: true, Priority: 260},
-	{RuleType: rules.RuleTypeSenderDomain, Operator: rules.OperatorContains, RuleValue: "google.com", TargetLabel: LabelSecurity, Enabled: true, Priority: 220},
-	{RuleType: rules.RuleTypeSubject, Operator: rules.OperatorContains, RuleValue: "sign-in", TargetLabel: LabelSecurity, Enabled: true, Priority: 210},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "verification code", TargetLabel: LabelSecurity, Enabled: true, Priority: 210},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "otp", TargetLabel: LabelSecurity, Enabled: true, Priority: 210},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "2fa", TargetLabel: LabelSecurity, Enabled: true, Priority: 210},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "authenticator", TargetLabel: LabelSecurity, Enabled: true, Priority: 210},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "lock your account", TargetLabel: LabelSecurity, Enabled: true, Priority: 210},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "если это не были вы", TargetLabel: LabelSecurity, Enabled: true, Priority: 210},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "вошла в систему", TargetLabel: LabelSecurity, Enabled: true, Priority: 205},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "подтвердить адрес эл. почты", TargetLabel: LabelSecurity, Enabled: true, Priority: 205},
-	{RuleType: rules.RuleTypeSenderDomain, Operator: rules.OperatorContains, RuleValue: "bank.com", TargetLabel: LabelTransactions, Enabled: true, Priority: 180},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "transaction", TargetLabel: LabelTransactions, Enabled: true, Priority: 170},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "payment", TargetLabel: LabelTransactions, Enabled: true, Priority: 170},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "invoice", TargetLabel: LabelTransactions, Enabled: true, Priority: 170},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "receipt", TargetLabel: LabelTransactions, Enabled: true, Priority: 170},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "card", TargetLabel: LabelTransactions, Enabled: true, Priority: 160},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "qr pay", TargetLabel: LabelTransactions, Enabled: true, Priority: 160},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "thank you for applying", TargetLabel: LabelJob, Enabled: true, Priority: 180},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "your application has been received", TargetLabel: LabelJob, Enabled: true, Priority: 180},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "we have received your application", TargetLabel: LabelJob, Enabled: true, Priority: 180},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "thank you for taking the time to apply", TargetLabel: LabelJob, Enabled: true, Priority: 180},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "talent acquisition team", TargetLabel: LabelJob, Enabled: true, Priority: 175},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "will not be proceeding at this time", TargetLabel: LabelJob, Enabled: true, Priority: 175},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "hiring team", TargetLabel: LabelJob, Enabled: true, Priority: 170},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "backend engineer", TargetLabel: LabelJob, Enabled: true, Priority: 170},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "applicant", TargetLabel: LabelJob, Enabled: true, Priority: 165},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "position", TargetLabel: LabelJob, Enabled: true, Priority: 155},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "role", TargetLabel: LabelJob, Enabled: true, Priority: 150},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "interview", TargetLabel: LabelJob, Enabled: true, Priority: 150},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "recruiter", TargetLabel: LabelJob, Enabled: true, Priority: 150},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "job", TargetLabel: LabelJob, Enabled: true, Priority: 140},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "opportunity", TargetLabel: LabelJob, Enabled: true, Priority: 140},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "vacancy", TargetLabel: LabelJob, Enabled: true, Priority: 140},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "resume", TargetLabel: LabelJob, Enabled: true, Priority: 130},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "subscription will end", TargetLabel: LabelPromo, Enabled: true, Priority: 145},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "renew", TargetLabel: LabelPromo, Enabled: true, Priority: 140},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "upgrade", TargetLabel: LabelPromo, Enabled: true, Priority: 140},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "keep your", TargetLabel: LabelPromo, Enabled: true, Priority: 130},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "sale", TargetLabel: LabelPromo, Enabled: true, Priority: 120},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "discount", TargetLabel: LabelPromo, Enabled: true, Priority: 120},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "promo", TargetLabel: LabelPromo, Enabled: true, Priority: 120},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "coupon", TargetLabel: LabelPromo, Enabled: true, Priority: 120},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "offer", TargetLabel: LabelPromo, Enabled: true, Priority: 110},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "deal", TargetLabel: LabelPromo, Enabled: true, Priority: 110},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "% off", TargetLabel: LabelPromo, Enabled: true, Priority: 110},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "notification", TargetLabel: LabelSocial, Enabled: true, Priority: 100},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "friend", TargetLabel: LabelSocial, Enabled: true, Priority: 100},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "comment", TargetLabel: LabelSocial, Enabled: true, Priority: 100},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "mention", TargetLabel: LabelSocial, Enabled: true, Priority: 100},
-	{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "invitation", TargetLabel: LabelSocial, Enabled: true, Priority: 100},
 }

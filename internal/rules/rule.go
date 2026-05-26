@@ -13,6 +13,11 @@ const (
 	OperatorContains = "contains"
 )
 
+const (
+	ScopeGlobal       = "global"
+	ScopeUserSpecific = "user_specific"
+)
+
 type Rule struct {
 	RuleType    string
 	Operator    string
@@ -20,4 +25,5 @@ type Rule struct {
 	TargetLabel string
 	Enabled     bool
 	Priority    int
+	Scope       string
 }

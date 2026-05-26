@@ -18,7 +18,10 @@ Backend pet project for automatic Gmail email triage and labeling.
   - Promo
   - Social
   - Unknown
-- User rules support in classifier (`rule_type` + `operator` + priority-based scoring)
+- User rules support in classifier:
+  - global rules apply to every scan
+  - user-specific rules override matching global rules
+  - rules are managed in PostgreSQL instead of compiled into the classifier
 - Manual full scan endpoint: `POST /scans`
   - Publishes raw email events to RabbitMQ queue `email.raw`
   - For Gmail source, scan is paginated and processed in batches
@@ -86,12 +89,15 @@ The full stack starts `label-worker`, so local Gmail files must exist at `secret
 
 `user_rules` fields used by classifier:
 
+- `user_id`: `NULL` for global rules, concrete user id for user-specific rules
 - `rule_type`: `sender_email` | `sender_domain` | `subject` | `body` | `any`
 - `operator`: `equals` | `contains`
 - `rule_value`: value to match
 - `target_label`: `Job` | `Transactions` | `Security` | `Promo` | `Social` | `Unknown`
-- `priority`: higher value = higher precedence
+- `priority`: higher value = higher precedence within the same rule scope
 - `enabled`: `true`/`false`
+
+User-specific rules always override matching global rules. Priority is only compared inside the same scope.
 
 Quick SQL examples:
 
@@ -99,6 +105,7 @@ Quick SQL examples:
 psql "postgres://postgres:postgres@localhost:5432/email_triage?sslmode=disable" -c "
 INSERT INTO user_rules (user_id, rule_type, operator, rule_value, target_label, enabled, priority)
 VALUES
+  (NULL,'sender_domain','contains','linkedin.com','Job',true,300),
   ('user_1','sender_domain','equals','linkedin.com','Job',true,300),
   ('user_1','subject','contains','receipt','Transactions',true,250),
   ('user_1','sender_email','equals','no-reply@accounts.google.com','Security',true,350);
