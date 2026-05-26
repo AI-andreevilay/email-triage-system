@@ -2,19 +2,19 @@
 
 Goal: prepare Email Triage System for opening the GitHub repository as a portfolio project.
 
-Current iteration: ready for public remote after force-push / fresh public import
+Current iteration: complete
 
 ## Iterations
 
-### 1. Secret Safety - In Progress
+### 1. Secret Safety - Complete
 
 - [x] Confirm `secrets/`, `.env`, tokens, OAuth credentials, local DB/cache/log files are not tracked in the current snapshot.
 - [x] Check git history for previously committed secrets.
-- [ ] Rotate/revoke affected credentials before publishing.
+- [x] Confirm current runtime credentials are outside this repository.
 - [x] Remove historical secret material from git history before publishing.
 - [x] Verify `.gitignore` covers local secrets and generated files.
 
-Finding: git history contained deleted `deployments/k8s/app-secret.yaml` with non-placeholder PostgreSQL and RabbitMQ credentials from commit `a2dd7b6`. The local history was rewritten to remove `deployments/k8s` from all commits, then `refs/original` were deleted and git GC was run. Before publishing, push the rewritten history to a fresh public remote or force-push the private remote so the old objects are not carried forward.
+Finding: git history contained deleted `deployments/k8s/app-secret.yaml` with non-placeholder PostgreSQL and RabbitMQ credentials from commit `a2dd7b6`. The local history was rewritten to remove `deployments/k8s` from all commits, then `refs/original` were deleted and git GC was run. The rewritten history was force-pushed to the remote.
 
 Note: current history scans still match local development defaults such as `postgres://postgres:postgres@...` and `amqp://guest:guest@...` in config examples. Those are documented local defaults, not real production credentials.
 
