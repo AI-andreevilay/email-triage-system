@@ -14,9 +14,10 @@ type Handler struct {
 	store  *storage.Postgres
 	reader *reader.Source
 	broker *broker.RabbitMQ
+	mux    *http.ServeMux
 }
 
-func NewRouter(store *storage.Postgres, emailReader *reader.Source, messageBroker *broker.RabbitMQ) (http.Handler, error) {
+func NewHandler(store *storage.Postgres, emailReader *reader.Source, messageBroker *broker.RabbitMQ) (*Handler, error) {
 	if store == nil || emailReader == nil || messageBroker == nil {
 		return nil, errors.New("api dependencies are not configured")
 	}
@@ -31,7 +32,12 @@ func NewRouter(store *storage.Postgres, emailReader *reader.Source, messageBroke
 	mux.HandleFunc("GET /healthz", healthz)
 	mux.HandleFunc("POST /scans", h.createScan)
 	mux.HandleFunc("GET /scans/{id}", h.getScan)
-	return mux, nil
+	h.mux = mux
+	return h, nil
+}
+
+func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	h.mux.ServeHTTP(w, r)
 }
 
 func healthz(w http.ResponseWriter, _ *http.Request) {

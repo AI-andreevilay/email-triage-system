@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"time"
 )
 
 type Config struct {
@@ -17,6 +18,9 @@ type Config struct {
 	GmailReadMaxResults    int64
 	GmailReadQuery         string
 	LabelWorkerConcurrency int
+	ScheduledScanInterval  time.Duration
+	ScheduledScanMode      string
+	ScheduledScanQuery     string
 }
 
 func Load() Config {
@@ -30,6 +34,9 @@ func Load() Config {
 	gmailReadMaxResults := getEnvInt64("GMAIL_READ_MAX_RESULTS", 100)
 	gmailReadQuery := getEnv("GMAIL_READ_QUERY", "in:inbox -in:trash")
 	labelWorkerConcurrency := getEnvInt("LABEL_WORKER_CONCURRENCY", 4)
+	scheduledScanInterval := getEnvDuration("SCHEDULED_SCAN_INTERVAL", 0)
+	scheduledScanMode := getEnv("SCHEDULED_SCAN_MODE", "dry_run")
+	scheduledScanQuery := getEnv("SCHEDULED_SCAN_QUERY", "")
 	return Config{
 		HTTPPort:               port,
 		PostgresURL:            postgresURL,
@@ -41,6 +48,9 @@ func Load() Config {
 		GmailReadMaxResults:    gmailReadMaxResults,
 		GmailReadQuery:         gmailReadQuery,
 		LabelWorkerConcurrency: labelWorkerConcurrency,
+		ScheduledScanInterval:  scheduledScanInterval,
+		ScheduledScanMode:      scheduledScanMode,
+		ScheduledScanQuery:     scheduledScanQuery,
 	}
 }
 
@@ -73,4 +83,16 @@ func getEnvInt(key string, fallback int) int {
 		return fallback
 	}
 	return int(parsed)
+}
+
+func getEnvDuration(key string, fallback time.Duration) time.Duration {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	parsed, err := time.ParseDuration(v)
+	if err != nil || parsed <= 0 {
+		return fallback
+	}
+	return parsed
 }

@@ -57,19 +57,23 @@ func main() {
 		log.Fatal(err)
 	}
 
-	router, err := api.NewRouter(pg, emailReader, mq)
+	handler, err := api.NewHandler(pg, emailReader, mq)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	server := &http.Server{
 		Addr:              ":" + cfg.HTTPPort,
-		Handler:           router,
+		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	if err := handler.StartScheduledScans(ctx, cfg.ScheduledScanInterval, cfg.ScheduledScanMode, cfg.ScheduledScanQuery); err != nil {
+		log.Fatal(err)
+	}
 
 	go func() {
 		<-ctx.Done()

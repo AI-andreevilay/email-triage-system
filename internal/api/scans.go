@@ -57,6 +57,35 @@ type statusCounts struct {
 	Applied    int `json:"applied"`
 }
 
+func (h *Handler) StartScheduledScans(ctx context.Context, interval time.Duration, mode, query string) error {
+	if interval <= 0 {
+		return nil
+	}
+	if mode == "" {
+		mode = scanModeDryRun
+	}
+	if mode != scanModeDryRun && mode != scanModeApply {
+		return errors.New("scheduled scan mode must be dry_run or apply")
+	}
+
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if _, err := h.startScan(ctx, defaultUserID, mode, query); err != nil {
+					log.Printf("failed to start scheduled scan mode=%s query=%q error=%v", mode, query, err)
+				}
+			}
+		}
+	}()
+
+	return nil
+}
+
 func (h *Handler) createScan(w http.ResponseWriter, r *http.Request) {
 	var req createScanRequest
 	if r.Body != nil {
@@ -75,17 +104,11 @@ func (h *Handler) createScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	runID, err := h.store.CreateScanRun(r.Context(), storagemodels.ScanRun{
-		UserID: defaultUserID,
-		Mode:   mode,
-		Status: "enqueuing",
-	})
+	runID, err := h.startScan(context.Background(), defaultUserID, mode, req.Query)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "failed to create scan run")
 		return
 	}
-
-	go h.enqueueScan(context.Background(), runID, defaultUserID, mode, req.Query)
 
 	writeJSON(w, http.StatusAccepted, createScanResponse{
 		Result: "ok",
@@ -95,6 +118,20 @@ func (h *Handler) createScan(w http.ResponseWriter, r *http.Request) {
 		Status: "enqueuing",
 		Query:  req.Query,
 	})
+}
+
+func (h *Handler) startScan(ctx context.Context, userID, mode, query string) (int64, error) {
+	runID, err := h.store.CreateScanRun(ctx, storagemodels.ScanRun{
+		UserID: userID,
+		Mode:   mode,
+		Status: "enqueuing",
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	go h.enqueueScan(context.Background(), runID, userID, mode, query)
+	return runID, nil
 }
 
 func (h *Handler) enqueueScan(ctx context.Context, runID int64, userID, mode, query string) {

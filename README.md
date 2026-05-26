@@ -143,6 +143,14 @@ curl -X POST http://localhost:8080/scans \
   -d '{"mode":"dry_run","query":"-in:trash -in:spam"}'
 ```
 
+Recurring scans can be enabled inside the API process:
+
+```text
+SCHEDULED_SCAN_INTERVAL=3h
+SCHEDULED_SCAN_MODE=apply
+SCHEDULED_SCAN_QUERY=in:inbox -in:trash newer_than:1d
+```
+
 Stop the stack:
 
 ```bash
