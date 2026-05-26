@@ -316,6 +316,126 @@ func TestClassifierRealWorldJobMails(t *testing.T) {
 	}
 }
 
+func TestClassifierUnknownAuditRules(t *testing.T) {
+	c := New()
+	userRules := unknownAuditGlobalRulesForTest()
+
+	tests := []struct {
+		name      string
+		message   reader.Message
+		wantLabel string
+	}{
+		{
+			name: "lever application flow",
+			message: reader.Message{
+				From:        "HighLevel <no-reply@hire.lever.co>",
+				Subject:     "Thank you for your application to HighLevel",
+				BodySnippet: "Thank you for your interest in HighLevel.",
+			},
+			wantLabel: LabelJob,
+		},
+		{
+			name: "codility assessment",
+			message: reader.Message{
+				From:        "Codility <notifications@codility.com>",
+				Subject:     "Codility assessment invitation",
+				BodySnippet: "The hiring team invites you to complete the assessment.",
+			},
+			wantLabel: LabelJob,
+		},
+		{
+			name: "greenhouse security code beats ats domain",
+			message: reader.Message{
+				From:        "Greenhouse <no-reply@us.greenhouse-mail.io>",
+				Subject:     "Your security code",
+				BodySnippet: "Use this security code to continue your application.",
+			},
+			wantLabel: LabelSecurity,
+		},
+		{
+			name: "hetzner access details",
+			message: reader.Message{
+				From:        "Hetzner Online GmbH <support@hetzner.com>",
+				Subject:     "Your access details",
+				BodySnippet: "Below are the login credentials for your new account.",
+			},
+			wantLabel: LabelSecurity,
+		},
+		{
+			name: "discord login link is security",
+			message: reader.Message{
+				From:        "Discord <noreply@discord.com>",
+				Subject:     "Your Discord login link",
+				BodySnippet: "Click this login link to sign in.",
+			},
+			wantLabel: LabelSecurity,
+		},
+		{
+			name: "discord mention is social",
+			message: reader.Message{
+				From:        "Discord <noreply@discord.com>",
+				Subject:     "alex mentioned you in backend",
+				BodySnippet: "You were mentioned in a channel.",
+			},
+			wantLabel: LabelSocial,
+		},
+		{
+			name: "permatabank e-statement",
+			message: reader.Message{
+				From:        "PermataBank <contact.center@permatabank.co.id>",
+				Subject:     "e-Statement rekening Anda",
+				BodySnippet: "Incoming Transfer summary is available.",
+			},
+			wantLabel: LabelTransactions,
+		},
+		{
+			name: "gopay top up",
+			message: reader.Message{
+				From:        "GoPay <noreply@customers.go-pay.co.id>",
+				Subject:     "Top Up berhasil",
+				BodySnippet: "Your GoPay top up has completed.",
+			},
+			wantLabel: LabelTransactions,
+		},
+		{
+			name: "habr digest",
+			message: reader.Message{
+				From:        "Habr <noreply@habr.com>",
+				Subject:     "Самое интересное по вашим хабам c 12 мая по 18 мая",
+				BodySnippet: "Рассылка Хабра.",
+			},
+			wantLabel: LabelSocial,
+		},
+		{
+			name: "gojek marketing",
+			message: reader.Message{
+				From:        "Gojek <no-reply@marketing.go-jek.com>",
+				Subject:     "GoFood Hemat maks. 50RB",
+				BodySnippet: "Maksi enak termasuk ongkir.",
+			},
+			wantLabel: LabelPromo,
+		},
+		{
+			name: "trip travel radar",
+			message: reader.Message{
+				From:        "Trip.com <newsletter@newsletter.trip.com>",
+				Subject:     "Travel Radar: latest travel trends",
+				BodySnippet: "Travel deals and destination ideas.",
+			},
+			wantLabel: LabelPromo,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := c.Classify(tt.message, userRules)
+			if result.Label != tt.wantLabel {
+				t.Fatalf("label = %s, want %s, reason=%s", result.Label, tt.wantLabel, result.Reason)
+			}
+		})
+	}
+}
+
 func seededGlobalRulesForTest() []rules.Rule {
 	return []rules.Rule{
 		{RuleType: rules.RuleTypeSenderDomain, Operator: rules.OperatorContains, RuleValue: "google.com", TargetLabel: LabelSecurity, Enabled: true, Priority: 220, Scope: rules.ScopeGlobal},
@@ -368,5 +488,62 @@ func seededGlobalRulesForTest() []rules.Rule {
 		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "comment", TargetLabel: LabelSocial, Enabled: true, Priority: 100, Scope: rules.ScopeGlobal},
 		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "mention", TargetLabel: LabelSocial, Enabled: true, Priority: 100, Scope: rules.ScopeGlobal},
 		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "invitation", TargetLabel: LabelSocial, Enabled: true, Priority: 100, Scope: rules.ScopeGlobal},
+	}
+}
+
+func unknownAuditGlobalRulesForTest() []rules.Rule {
+	return []rules.Rule{
+		{RuleType: rules.RuleTypeSenderDomain, Operator: rules.OperatorContains, RuleValue: "steampowered.com", TargetLabel: LabelSecurity, Enabled: true, Priority: 280, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeSenderDomain, Operator: rules.OperatorContains, RuleValue: "nvidia.com", TargetLabel: LabelSecurity, Enabled: true, Priority: 270, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeSenderDomain, Operator: rules.OperatorContains, RuleValue: "id.apple.com", TargetLabel: LabelSecurity, Enabled: true, Priority: 270, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeSenderDomain, Operator: rules.OperatorContains, RuleValue: "hetzner.com", TargetLabel: LabelSecurity, Enabled: true, Priority: 260, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "security code", TargetLabel: LabelSecurity, Enabled: true, Priority: 260, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "new sign in", TargetLabel: LabelSecurity, Enabled: true, Priority: 250, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "new sign-in", TargetLabel: LabelSecurity, Enabled: true, Priority: 250, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "login link", TargetLabel: LabelSecurity, Enabled: true, Priority: 250, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "authenticator recovery", TargetLabel: LabelSecurity, Enabled: true, Priority: 250, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "account information updated", TargetLabel: LabelSecurity, Enabled: true, Priority: 245, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "access details", TargetLabel: LabelSecurity, Enabled: true, Priority: 240, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "authentication to your account", TargetLabel: LabelSecurity, Enabled: true, Priority: 240, Scope: rules.ScopeGlobal},
+
+		{RuleType: rules.RuleTypeSenderDomain, Operator: rules.OperatorContains, RuleValue: "permatabank.co.id", TargetLabel: LabelTransactions, Enabled: true, Priority: 250, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeSenderDomain, Operator: rules.OperatorContains, RuleValue: "customers.go-pay.co.id", TargetLabel: LabelTransactions, Enabled: true, Priority: 245, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "incoming transfer", TargetLabel: LabelTransactions, Enabled: true, Priority: 230, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "top up", TargetLabel: LabelTransactions, Enabled: true, Priority: 220, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "e-statement", TargetLabel: LabelTransactions, Enabled: true, Priority: 220, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "rekening", TargetLabel: LabelTransactions, Enabled: true, Priority: 215, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "langganan premium", TargetLabel: LabelTransactions, Enabled: true, Priority: 210, Scope: rules.ScopeGlobal},
+
+		{RuleType: rules.RuleTypeSenderDomain, Operator: rules.OperatorContains, RuleValue: "hire.lever.co", TargetLabel: LabelJob, Enabled: true, Priority: 245, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeSenderDomain, Operator: rules.OperatorContains, RuleValue: "greenhouse-mail.io", TargetLabel: LabelJob, Enabled: true, Priority: 245, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeSenderDomain, Operator: rules.OperatorContains, RuleValue: "ats.rippling.com", TargetLabel: LabelJob, Enabled: true, Priority: 245, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeSenderDomain, Operator: rules.OperatorContains, RuleValue: "teamtailor-mail.com", TargetLabel: LabelJob, Enabled: true, Priority: 245, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeSenderDomain, Operator: rules.OperatorContains, RuleValue: "workablemail.com", TargetLabel: LabelJob, Enabled: true, Priority: 245, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeSenderDomain, Operator: rules.OperatorContains, RuleValue: "hi.wellfound.com", TargetLabel: LabelJob, Enabled: true, Priority: 245, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeSenderDomain, Operator: rules.OperatorContains, RuleValue: "codility.com", TargetLabel: LabelJob, Enabled: true, Priority: 245, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeSenderDomain, Operator: rules.OperatorContains, RuleValue: "m.weworkremotely.com", TargetLabel: LabelJob, Enabled: true, Priority: 230, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeSenderDomain, Operator: rules.OperatorContains, RuleValue: "underdog.io", TargetLabel: LabelJob, Enabled: true, Priority: 230, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeSenderDomain, Operator: rules.OperatorContains, RuleValue: "micro1.ai", TargetLabel: LabelJob, Enabled: true, Priority: 230, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "successfully submitted", TargetLabel: LabelJob, Enabled: true, Priority: 210, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "codility assessment", TargetLabel: LabelJob, Enabled: true, Priority: 210, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "invites you to complete", TargetLabel: LabelJob, Enabled: true, Priority: 205, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "thank you for your application", TargetLabel: LabelJob, Enabled: true, Priority: 205, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "open to work", TargetLabel: LabelJob, Enabled: true, Priority: 170, Scope: rules.ScopeGlobal},
+
+		{RuleType: rules.RuleTypeSenderDomain, Operator: rules.OperatorContains, RuleValue: "habr.com", TargetLabel: LabelSocial, Enabled: true, Priority: 220, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeSenderDomain, Operator: rules.OperatorContains, RuleValue: "discord.com", TargetLabel: LabelSocial, Enabled: true, Priority: 170, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "mentioned you", TargetLabel: LabelSocial, Enabled: true, Priority: 210, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "упомянул", TargetLabel: LabelSocial, Enabled: true, Priority: 210, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "popular in your network", TargetLabel: LabelSocial, Enabled: true, Priority: 180, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "самое интересное по вашим хабам", TargetLabel: LabelSocial, Enabled: true, Priority: 180, Scope: rules.ScopeGlobal},
+
+		{RuleType: rules.RuleTypeSenderDomain, Operator: rules.OperatorContains, RuleValue: "marketing.go-jek.com", TargetLabel: LabelPromo, Enabled: true, Priority: 190, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeSenderDomain, Operator: rules.OperatorContains, RuleValue: "news.ozon.ru", TargetLabel: LabelPromo, Enabled: true, Priority: 180, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeSenderDomain, Operator: rules.OperatorContains, RuleValue: "newsletter.trip.com", TargetLabel: LabelPromo, Enabled: true, Priority: 180, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeSenderDomain, Operator: rules.OperatorContains, RuleValue: "info.sportmaster.ru", TargetLabel: LabelPromo, Enabled: true, Priority: 180, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeSenderDomain, Operator: rules.OperatorContains, RuleValue: "educative.io", TargetLabel: LabelPromo, Enabled: true, Priority: 160, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeSenderDomain, Operator: rules.OperatorContains, RuleValue: "artlist.io", TargetLabel: LabelPromo, Enabled: true, Priority: 160, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "travel radar", TargetLabel: LabelPromo, Enabled: true, Priority: 160, Scope: rules.ScopeGlobal},
+		{RuleType: rules.RuleTypeAny, Operator: rules.OperatorContains, RuleValue: "travel trends", TargetLabel: LabelPromo, Enabled: true, Priority: 160, Scope: rules.ScopeGlobal},
 	}
 }
