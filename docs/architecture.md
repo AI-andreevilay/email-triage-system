@@ -203,6 +203,14 @@ See `.env.example` and `README.md` for local usage.
 
 For local or deployed console login, POS can send a Telegram Login Widget payload to ETS `POST /auth/telegram`, store the returned project token in a session cookie, and use it as `Authorization: Bearer`.
 
+ETS scan operations can be exposed in POS as Project Extension Actions without
+adding ETS-specific UI or manifest endpoints. In the initial integration, POS
+configuration can describe a generic action that calls the existing
+`POST /scans` endpoint server-side with the ETS-issued JWT. ETS remains the
+authority for scan authorization and derives the scan owner from the JWT subject.
+POS can link action results back to database explorer views such as `scan_runs`
+and `email_messages`.
+
 ## Current Limitations
 
 - No first-party web UI in this repository.

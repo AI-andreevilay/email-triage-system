@@ -263,4 +263,3 @@ Unit tests do not require Gmail, PostgreSQL, or RabbitMQ.
 
 - [Architecture](docs/architecture.md)
 - [ADR 0001: Database-managed Global Rules](docs/adr/0001-database-managed-global-rules.md)
-- [Publication Hygiene Plan](docs/publication-hygiene-plan.md)
