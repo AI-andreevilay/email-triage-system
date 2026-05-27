@@ -54,7 +54,7 @@ flowchart LR
     LabelWorker --> Gmail[Gmail API]
 ```
 
-The API starts scans and publishes raw message events. The classifier worker loads rules, assigns a label, stores the result, and publishes apply events when requested. The label worker applies Gmail labels and archives messages only in `apply` mode.
+The API starts scans and publishes raw message events. The classifier worker loads rules, assigns a label, stores the result, and publishes apply events when requested. The label worker applies Gmail labels, archives messages, and can mark them read only in `apply` mode.
 
 ## Rule Model
 
@@ -143,12 +143,21 @@ curl -X POST http://localhost:8080/scans \
   -d '{"mode":"dry_run","query":"-in:trash -in:spam"}'
 ```
 
+Apply labels and mark matched messages read:
+
+```bash
+curl -X POST http://localhost:8080/scans \
+  -H "Content-Type: application/json" \
+  -d '{"mode":"apply","query":"in:inbox -in:trash newer_than:1d","mark_read":true}'
+```
+
 Recurring scans can be enabled inside the API process:
 
 ```text
 SCHEDULED_SCAN_INTERVAL=3h
 SCHEDULED_SCAN_MODE=apply
 SCHEDULED_SCAN_QUERY=in:inbox -in:trash newer_than:1d
+SCHEDULED_SCAN_MARK_READ=false
 ```
 
 Stop the stack:

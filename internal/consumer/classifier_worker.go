@@ -119,6 +119,7 @@ func (w *ClassifierWorker) processRawEmail(ctx context.Context, body []byte) err
 			ScanRunID:    event.ScanRunID,
 			UserID:       event.UserID,
 			Mode:         event.Mode,
+			MarkRead:     event.MarkRead,
 			ClassifiedAt: time.Now().UTC(),
 			Classification: broker.ClassifiedEmailMessage{
 				GmailMessageID: event.Message.GmailMessageID,

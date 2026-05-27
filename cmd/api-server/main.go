@@ -71,7 +71,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	if err := handler.StartScheduledScans(ctx, cfg.ScheduledScanInterval, cfg.ScheduledScanMode, cfg.ScheduledScanQuery); err != nil {
+	if err := handler.StartScheduledScans(ctx, cfg.ScheduledScanInterval, cfg.ScheduledScanMode, cfg.ScheduledScanQuery, cfg.ScheduledScanMarkRead); err != nil {
 		log.Fatal(err)
 	}
 

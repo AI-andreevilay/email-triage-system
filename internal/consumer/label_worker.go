@@ -135,7 +135,7 @@ func (w *LabelWorker) processClassifiedEmail(ctx context.Context, body []byte) e
 		return err
 	}
 
-	if err := w.gmailClient.ApplyLabelToMessage(ctx, event.Classification.GmailMessageID, labelID); err != nil {
+	if err := w.gmailClient.ApplyLabelToMessage(ctx, event.Classification.GmailMessageID, labelID, event.MarkRead); err != nil {
 		if gmail.IsPermanentError(err) {
 			return errDropDelivery
 		}

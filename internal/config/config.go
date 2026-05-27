@@ -21,6 +21,7 @@ type Config struct {
 	ScheduledScanInterval  time.Duration
 	ScheduledScanMode      string
 	ScheduledScanQuery     string
+	ScheduledScanMarkRead  bool
 }
 
 func Load() Config {
@@ -37,6 +38,7 @@ func Load() Config {
 	scheduledScanInterval := getEnvDuration("SCHEDULED_SCAN_INTERVAL", 0)
 	scheduledScanMode := getEnv("SCHEDULED_SCAN_MODE", "dry_run")
 	scheduledScanQuery := getEnv("SCHEDULED_SCAN_QUERY", "")
+	scheduledScanMarkRead := getEnvBool("SCHEDULED_SCAN_MARK_READ", false)
 	return Config{
 		HTTPPort:               port,
 		PostgresURL:            postgresURL,
@@ -51,6 +53,7 @@ func Load() Config {
 		ScheduledScanInterval:  scheduledScanInterval,
 		ScheduledScanMode:      scheduledScanMode,
 		ScheduledScanQuery:     scheduledScanQuery,
+		ScheduledScanMarkRead:  scheduledScanMarkRead,
 	}
 }
 
@@ -92,6 +95,18 @@ func getEnvDuration(key string, fallback time.Duration) time.Duration {
 	}
 	parsed, err := time.ParseDuration(v)
 	if err != nil || parsed <= 0 {
+		return fallback
+	}
+	return parsed
+}
+
+func getEnvBool(key string, fallback bool) bool {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseBool(v)
+	if err != nil {
 		return fallback
 	}
 	return parsed

@@ -23,17 +23,19 @@ const (
 )
 
 type createScanRequest struct {
-	Mode  string `json:"mode"`
-	Query string `json:"query"`
+	Mode     string `json:"mode"`
+	Query    string `json:"query"`
+	MarkRead bool   `json:"mark_read"`
 }
 
 type createScanResponse struct {
-	Result string `json:"result"`
-	RunID  int64  `json:"run_id"`
-	UserID string `json:"user_id"`
-	Mode   string `json:"mode"`
-	Status string `json:"status"`
-	Query  string `json:"query,omitempty"`
+	Result   string `json:"result"`
+	RunID    int64  `json:"run_id"`
+	UserID   string `json:"user_id"`
+	Mode     string `json:"mode"`
+	Status   string `json:"status"`
+	Query    string `json:"query,omitempty"`
+	MarkRead bool   `json:"mark_read"`
 }
 
 type scanResponse struct {
@@ -57,7 +59,7 @@ type statusCounts struct {
 	Applied    int `json:"applied"`
 }
 
-func (h *Handler) StartScheduledScans(ctx context.Context, interval time.Duration, mode, query string) error {
+func (h *Handler) StartScheduledScans(ctx context.Context, interval time.Duration, mode, query string, markRead bool) error {
 	if interval <= 0 {
 		return nil
 	}
@@ -76,8 +78,8 @@ func (h *Handler) StartScheduledScans(ctx context.Context, interval time.Duratio
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				if _, err := h.startScan(ctx, defaultUserID, mode, query); err != nil {
-					log.Printf("failed to start scheduled scan mode=%s query=%q error=%v", mode, query, err)
+				if _, err := h.startScan(ctx, defaultUserID, mode, query, markRead); err != nil {
+					log.Printf("failed to start scheduled scan mode=%s query=%q mark_read=%t error=%v", mode, query, markRead, err)
 				}
 			}
 		}
@@ -104,23 +106,24 @@ func (h *Handler) createScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	runID, err := h.startScan(context.Background(), defaultUserID, mode, req.Query)
+	runID, err := h.startScan(context.Background(), defaultUserID, mode, req.Query, req.MarkRead)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "failed to create scan run")
 		return
 	}
 
 	writeJSON(w, http.StatusAccepted, createScanResponse{
-		Result: "ok",
-		RunID:  runID,
-		UserID: defaultUserID,
-		Mode:   mode,
-		Status: "enqueuing",
-		Query:  req.Query,
+		Result:   "ok",
+		RunID:    runID,
+		UserID:   defaultUserID,
+		Mode:     mode,
+		Status:   "enqueuing",
+		Query:    req.Query,
+		MarkRead: req.MarkRead,
 	})
 }
 
-func (h *Handler) startScan(ctx context.Context, userID, mode, query string) (int64, error) {
+func (h *Handler) startScan(ctx context.Context, userID, mode, query string, markRead bool) (int64, error) {
 	runID, err := h.store.CreateScanRun(ctx, storagemodels.ScanRun{
 		UserID: userID,
 		Mode:   mode,
@@ -130,11 +133,11 @@ func (h *Handler) startScan(ctx context.Context, userID, mode, query string) (in
 		return 0, err
 	}
 
-	go h.enqueueScan(context.Background(), runID, userID, mode, query)
+	go h.enqueueScan(context.Background(), runID, userID, mode, query, markRead)
 	return runID, nil
 }
 
-func (h *Handler) enqueueScan(ctx context.Context, runID int64, userID, mode, query string) {
+func (h *Handler) enqueueScan(ctx context.Context, runID int64, userID, mode, query string, markRead bool) {
 	failRun := func(totalFound, totalProcessed, totalFailed int) {
 		_ = h.store.CompleteScanRun(ctx, storagemodels.ScanRun{
 			ID:             runID,
@@ -168,6 +171,7 @@ func (h *Handler) enqueueScan(ctx context.Context, runID int64, userID, mode, qu
 				ScanRunID:   runID,
 				UserID:      userID,
 				Mode:        mode,
+				MarkRead:    markRead,
 				PublishedAt: time.Now().UTC(),
 				Message: broker.RawEmailMessage{
 					GmailMessageID: message.ID,

@@ -14,6 +14,7 @@ type RawEmailEvent struct {
 	ScanRunID   int64           `json:"scan_run_id"`
 	UserID      string          `json:"user_id"`
 	Mode        string          `json:"mode"`
+	MarkRead    bool            `json:"mark_read"`
 	PublishedAt time.Time       `json:"published_at"`
 	Message     RawEmailMessage `json:"message"`
 }
@@ -30,6 +31,7 @@ type ClassifiedEmailEvent struct {
 	ScanRunID      int64                  `json:"scan_run_id"`
 	UserID         string                 `json:"user_id"`
 	Mode           string                 `json:"mode"`
+	MarkRead       bool                   `json:"mark_read"`
 	ClassifiedAt   time.Time              `json:"classified_at"`
 	Classification ClassifiedEmailMessage `json:"classification"`
 }

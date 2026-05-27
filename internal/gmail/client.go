@@ -112,10 +112,15 @@ func (c *Client) EnsureLabel(ctx context.Context, labelName string) (string, err
 	return created.Id, nil
 }
 
-func (c *Client) ApplyLabelToMessage(ctx context.Context, messageID, labelID string) error {
+func (c *Client) ApplyLabelToMessage(ctx context.Context, messageID, labelID string, markRead bool) error {
+	removeLabelIDs := []string{"INBOX"}
+	if markRead {
+		removeLabelIDs = append(removeLabelIDs, "UNREAD")
+	}
+
 	_, err := c.service.Users.Messages.Modify(c.userID, messageID, &gmailv1.ModifyMessageRequest{
 		AddLabelIds:    []string{labelID},
-		RemoveLabelIds: []string{"INBOX"},
+		RemoveLabelIds: removeLabelIDs,
 	}).Context(ctx).Do()
 	return err
 }
