@@ -1,328 +1,221 @@
-# Email Triage System - Architecture
-
-## 1. Overview
-
-This system classifies Gmail emails and applies labels.
-The current implementation focuses on a local, event-driven backend with an explainable rule engine.
-
----
-
-## 2. Goals
-
-- Automatically classify emails
-- Support dry-run and apply modes
-- Ensure idempotent processing
-- Keep user data private (no email content stored)
-
----
-
-## 3. Non-Goals (MVP)
-
-- No authentication
-- No multi-user support
-- No UI
-- No LLM-based classification
-- No production deployment setup in this public repository
-- No heavy observability stack
-
----
-
-## 4. High-Level Architecture
-
-Main components:
-
-- API Server
-- Email Reader (mock or Gmail)
-- Broker (RabbitMQ)
-- Storage (PostgreSQL)
-- Classifier
-- Workers
-
-Current flow:
-
-Client -> API -> Reader -> Broker (email.raw) -> Classifier Worker -> PostgreSQL -> Broker (email.classified) -> Label Worker -> PostgreSQL
-
-Future flow:
-
-Client -> API -> Reader -> Broker -> Classifier Worker -> PostgreSQL -> Label Worker -> Gmail -> Log Pipeline -> AI Log Analytics
-
----
-
-## 5. Components
-
-### 5.1 API Server
-- Handles HTTP requests
-- Starts scan process
-- Publishes `email.raw` events to broker
-
-### 5.2 Email Reader
-- Fetches emails from:
-  - mock source (default)
-  - Gmail API source (optional, OAuth token based)
-- For Gmail source, scan uses paginated fetch in batches (`maxResults` per page)
-- Normalizes data
-
-### 5.3 Broker (RabbitMQ)
-- Receives raw email events from API
-- Topic exchange: `email.events`
-- Routing key and queue: `email.raw`
-- Routing key and queue: `email.classified`
-
-### 5.4 Classifier
-- Explainable rule-based classification (MVP)
-- Categories: Job, Transactions, Security, Promo, Social, Unknown
-- Global rules and user-specific rules are loaded from PostgreSQL for each message
-- Supported operators (MVP): `equals`, `contains`
-- Rule selection:
-  1. Match all applicable user-specific rules for the current user
-  2. If any user-specific rule matches, choose the best one by priority and specificity
-  3. Otherwise, match all applicable global rules
-  4. Choose the best global rule by priority and specificity
-  5. Fallback label is `Unknown` when no rule matches
-- Custom rule match inputs:
-  - sender email
-  - sender domain
-  - subject keywords
-  - optional body keywords (in memory only)
-- Example rules:
-  - sender_domain equals linkedin.com -> Job
-  - subject contains interview -> Job
-  - sender_email equals no-reply@accounts.google.com -> Security
-  - subject contains receipt -> Transactions
-- Each classification stores a short reason for dry-run review and debugging
-- Body keywords can be checked in memory during classification, but body content is never persisted
-
-### 5.5 Storage
-- PostgreSQL
-- Stores email metadata and classification results
-- Uses SQL migrations for schema management
-
-### 5.6 Workers
-- Classifier worker (current)
-- Label applier worker (current, Gmail API apply)
-
-### 5.7 AI Log Analytics (future)
-- Consumes structured operational events from API/workers (errors, retries, latency, label-apply failures)
-- Runs anomaly detection and trend analysis for system health and delivery quality
-- Produces actionable insights:
-  - failure clusters (for example by sender domain or Gmail error code)
-  - retry hot spots and queue lag warnings
-  - candidate rule suggestions for recurring unknown or misclassified messages
-- Stores summarized insights only (no raw email body)
-
----
-
-## 6. Data Model
-
-### email_messages
-- id
-- gmail_message_id
-- user_id
-- predicted_label
-- applied_label
-- confidence
-- reason
-- status
-- processed_at
-- created_at
-- unique(user_id, gmail_message_id)
-
-### scan_runs
-- id
-- user_id
-- mode (dry_run / apply)
-- status
-- started_at
-- finished_at
-- total_found
-- total_processed
-- total_failed
-
-### user_rules
-- id
-- user_id (`NULL` for global rules)
-- rule_type
-- operator
-- rule_value
-- target_label
-- enabled
-- priority
-- created_at
-- updated_at
-
----
-
-## 7. Data Flow
-
-Current:
-
-1. User triggers scan
-2. System fetches emails from configured reader source (mock or Gmail)
-3. Gmail source is read page-by-page (batch size default: 100)
-4. API publishes one `email.raw` event per message to RabbitMQ
-5. Classifier worker consumes `email.raw`
-6. Worker classifies using global + user-specific rules
-7. Worker stores metadata and classification result in PostgreSQL
-8. For `apply` mode, classifier worker publishes `email.classified`
-9. Label worker consumes `email.classified`
-10. Label worker applies Gmail label via Gmail API, removes `INBOX`, and updates `applied_label`, `status=applied`
-
-Possible future analytics flow:
-
-1. Reader publishes events
-2. Classifier worker consumes events
-3. Results stored in PostgreSQL
-4. Label worker applies labels
-5. API/workers publish structured operational logs/events
-6. AI analytics job/worker processes logs and writes insight summaries
-
----
-
-## 8. Idempotency
-
-- Unique constraint: user_id + gmail_message_id
-- Reprocessing same email should not create duplicates
-- Safe to rerun scans
-
----
-
-## 9. Privacy
-
-- Email body may be used for in-memory rule matching only (for optional body keyword checks)
-- Email body is NOT stored
-- Only metadata and classification results are persisted
-
----
-
-## 10. Key Decisions
-
-### Decision: Introduce RabbitMQ before workers
-Reason:
-- Move from synchronous scan flow to event flow incrementally
-- Keep classifier and label applying in dedicated worker iterations
-
-### Decision: Persist classification in classifier worker
-Reason:
-- Keep API focused on request orchestration and event publishing
-- Centralize idempotent write path in one consumer
-
-### Decision: Introduce real Gmail reader before real label apply
-Reason:
-- Validate Gmail OAuth and mailbox read path in dry-run mode first
-- Reduce integration risk by changing one external dependency at a time
-
-### Decision: Apply labels in dedicated label worker through Gmail API
-Reason:
-- Preserve async separation between classification and side effects
-- Keep Gmail API failures isolated from classifier path
-
-### Decision: Use paginated Gmail scan batches by default
-Reason:
-- Supports iterative full Inbox scan without loading everything in memory
-- Keeps API calls and queue publishing bounded per page
-
-### Decision: Start with single process API foundation
-Reason:
-- Establish runnable baseline before storage and scan logic
-
-### Decision: SQL-first storage in MVP
-Reason:
-- Keep persistence explicit and simple
-- Enforce idempotency at DB level with unique constraint
-
-### Decision: Use explainable rule-based classifier in MVP
-Reason:
-- Deterministic behavior is easier to validate in a local MVP
-- Classification reason is visible for dry-run review and debugging
-- Supports custom user rules without introducing LLM complexity yet
-
-### Decision: Evaluate custom user rules before any future LLM classifier
-Reason:
-- User intent should override generic model behavior when explicit rules exist
-- Keeps classification predictable and easy to troubleshoot
-
-### Decision: Update initial migration directly while still local-only
-Reason:
-- No production/staging database exists yet
-- Faster iteration during early schema shaping
-
-### Decision: Mock email reader before real integration
-Reason:
-- Validate pipeline incrementally without OAuth and external API dependencies
-
-### Decision: Do not introduce dedicated subagent config files in early MVP
-Reason:
-- Current scope is small enough for a single-agent workflow with iterative changes
-- Avoid extra maintenance overhead from agent-role config before complexity justifies it
-- Revisit when changes regularly span multiple modules and require repeatable specialized review roles (for example code-reviewer, migration-reviewer)
-
----
-
-## 11. Deployment Strategy
-
-### 11.1 Local development
-- Use Docker Compose for local dependencies.
-- Keep local workflow fast: run API + PostgreSQL, apply migrations, test scan/classification flow.
-
-### 11.2 Production-like deployment
-- Deployment manifests are not part of this public repository.
-- If this project is deployed, runtime credentials should be provided by the target platform's secret manager.
-- PostgreSQL and RabbitMQ credentials should be scoped to this application.
-- Backups are required before any real mailbox data is processed outside a local environment.
-
----
-
-## 12. Open Questions
-
-- How to handle Gmail rate limits?
-- How to improve classification accuracy?
-- When to introduce LLM?
-
----
-
-## 13. Future Improvements
-
-- Add observability (Prometheus)
-- Add LLM-based classification
-- Add a small rules management UI
-- Add rule suggestion reports for recurring `Unknown` messages
-
-## Ideas
-
-This section captures ideas that are not in committed scope yet.
-
-### 1 AI Log Analytics
-- Status: `idea`
-- Why: detect failure clusters and suggest rule improvements from operational events
-- MVP: daily/weekly anomaly summary from structured logs only
-- Risks: noisy signals without enough event volume
-- Success criteria: useful, actionable insights with low false-positive rate
-
-### 2 Fresh Email Digest (Rule-Based, non-AI)
-- Status: `idea`
-- Why: quick visibility into incoming mail without opening Gmail
-- MVP:
-  - Periodic Telegram digest
-  - "You received X new emails in last N hours"
-  - Breakdown by category (Job / Transactions / Security / Promo / Social / Unknown)
-  - Optional top senders and failed-to-classify count (`Unknown`)
-- Risks: digest noise and too frequent notifications
-- Success criteria: user can understand mailbox changes in <30 seconds from one message
-
-### 3 Fresh Email Digest (AI-Assisted)
-- Status: `idea`
-- Why: compress content of fresh emails into actionable summary
-- MVP:
-  - AI-generated short summary for new messages
-  - Optional extracted action items and priority hints
-  - Same Telegram delivery channel as rule-based digest
-- Risks:
-  - privacy constraints for email content processing
-  - model cost and latency
-  - hallucinated or overconfident summaries
-- Success criteria: summaries save review time while staying factually reliable
-
-### Suggested Rollout Order
-1. Implement 2 first (predictable and low cost).
-2. Add 3 behind a feature flag and explicit opt-in.
-3. Keep fallback to 2 when AI is unavailable.
+# Email Triage System Architecture
+
+This document is the current map of the Email Triage System codebase. It is written for maintainers and agents that need to understand the repository before making changes.
+
+## Product Scope
+
+Email Triage System is a backend service for explainable Gmail triage. It reads messages from a configured source, classifies them with database-managed rules, stores scan results, and can apply Gmail labels asynchronously.
+
+The current scope is a single-owner deployment model with project-owned authentication:
+
+- ETS owns Users, Telegram identity mapping, roles, and JWT issuing.
+- `pg-ops-console` can consume ETS-issued JWTs as a reusable admin console.
+- ETS does not contain a first-party web UI.
+
+## Runtime Components
+
+- API server: `cmd/api-server`
+- Classifier worker: `cmd/classifier-worker`
+- Label worker: `cmd/label-worker`
+- Gmail OAuth helper: `cmd/gmail-auth`
+- PostgreSQL: durable storage and rule source of truth
+- RabbitMQ: event transport between API and workers
+- Gmail API: optional real email reader and label applier
+
+```mermaid
+flowchart LR
+    Client[Client or pg-ops-console] --> API[ETS API Server]
+    API --> Auth[(users)]
+    API --> Reader[Email Reader]
+    Reader --> API
+    API --> Raw[RabbitMQ email.raw]
+    Raw --> Classifier[Classifier Worker]
+    Classifier --> Rules[(user_rules)]
+    Classifier --> Messages[(email_messages)]
+    Classifier --> Classified[RabbitMQ email.classified]
+    Classified --> LabelWorker[Label Worker]
+    LabelWorker --> Gmail[Gmail API]
+```
+
+## Authentication And Authorization
+
+Auth code lives under `internal/auth` and `internal/api/auth.go`.
+
+Public endpoints:
+
+- `GET /healthz`
+- `POST /auth/telegram`
+
+Authenticated endpoints:
+
+- `GET /auth/me`
+- `POST /scans`
+- `GET /scans/{id}`
+
+Telegram login flow:
+
+1. Client sends Telegram Login Widget payload to `POST /auth/telegram`.
+2. ETS verifies the Telegram hash with `TELEGRAM_BOT_TOKEN`.
+3. ETS looks up `users.telegram_id`.
+4. Disabled or unknown users are rejected.
+5. ETS issues an HS256 JWT.
+
+JWT claims include:
+
+- `iss`: configured `JWT_ISSUER`
+- `aud`: configured `JWT_AUDIENCE`
+- `sub`: ETS `users.id`
+- `role`: `user` or `admin`
+- `provider`: `telegram`
+- `exp`: configured by `AUTH_TOKEN_TTL`
+
+Authorization rules currently implemented:
+
+- `POST /scans`: any authenticated `user` or `admin`; `user_id` always comes from the JWT subject.
+- `GET /scans/{id}`: `admin` can read any scan; `user` can read only owned scans.
+
+Users are pre-provisioned in the database. There is no public self-registration path.
+
+## Data Model
+
+Schema migrations live in `migrations/`.
+
+Primary tables:
+
+- `users`
+  - UUID identity, Telegram identity, display metadata, role, enabled flag.
+- `scan_runs`
+  - One scan request and enqueue progress for one user.
+- `email_messages`
+  - Idempotent classification result keyed by `(user_id, gmail_message_id)`.
+- `user_rules`
+  - Global and user-specific classification rules.
+
+`user_rules.user_id = NULL` means Global Rule. A non-null `user_id` means User-Specific Rule.
+
+The initial migration reflects the current MVP schema directly. Later migrations remain to document the historical path for existing local deployments.
+
+## Scan Flow
+
+1. Authenticated client calls `POST /scans`.
+2. API creates a `scan_runs` row with `status=enqueuing`.
+3. API reads messages from the configured reader:
+   - mock reader by default;
+   - Gmail reader when `EMAIL_SOURCE=gmail`.
+4. API publishes one `email.raw` event per message.
+5. API updates scan enqueue counters and completes the run as `queued` or `queued_with_errors`.
+6. Classifier worker consumes `email.raw`.
+7. Classifier worker loads applicable rules, classifies the message, and upserts `email_messages`.
+8. In `apply` mode, classifier worker publishes `email.classified`.
+9. Label worker consumes `email.classified`, applies Gmail labels, optionally marks messages read, and updates status.
+
+`GET /scans/{id}` returns enqueue counters plus derived downstream status counts from `email_messages`.
+
+## Rule Engine
+
+Rule code lives under `internal/rules` and `internal/classifier`.
+
+Supported rule fields:
+
+- `sender_email`
+- `sender_domain`
+- `subject`
+- `body`
+- `any`
+
+Supported operators:
+
+- `equals`
+- `contains`
+
+Selection order:
+
+1. Evaluate enabled User-Specific Rules for the current user.
+2. If any match, choose the best user-specific match by priority and specificity.
+3. Otherwise evaluate Global Rules.
+4. Choose the best global match by priority and specificity.
+5. Fall back to `Unknown`.
+
+Classification stores a short reason for auditability. Body snippets may be used in memory, but raw email body content is not persisted.
+
+## Privacy And Secret Boundaries
+
+Persisted data is limited to metadata, rule matches, classification output, confidence, status, and timestamps.
+
+The repository must not contain runtime secrets:
+
+- `.env`
+- `secrets/`
+- Gmail OAuth credentials and tokens
+- Telegram bot tokens
+- production database or broker credentials
+
+The local `.gitignore` excludes those paths. `JWT_SECRET` and `TELEGRAM_BOT_TOKEN` are runtime configuration, not repository content.
+
+## Configuration
+
+Core environment:
+
+- `HTTP_PORT`
+- `POSTGRES_URL`
+- `RABBITMQ_URL`
+- `EMAIL_SOURCE`
+- `GMAIL_CREDENTIALS_FILE`
+- `GMAIL_TOKEN_FILE`
+- `GMAIL_READ_MAX_RESULTS`
+- `GMAIL_READ_QUERY`
+- `LABEL_WORKER_CONCURRENCY`
+
+Auth environment:
+
+- `JWT_SECRET`
+- `JWT_ISSUER`
+- `JWT_AUDIENCE`
+- `TELEGRAM_BOT_TOKEN`
+- `AUTH_TOKEN_TTL`
+
+Scheduled scan environment:
+
+- `SCHEDULED_SCAN_INTERVAL`
+- `SCHEDULED_SCAN_USER_ID`
+- `SCHEDULED_SCAN_MODE`
+- `SCHEDULED_SCAN_QUERY`
+- `SCHEDULED_SCAN_MARK_READ`
+
+See `.env.example` and `README.md` for local usage.
+
+## Package Map
+
+- `internal/api`: HTTP routing, auth endpoints, scan endpoints.
+- `internal/auth`: Telegram verification, JWT issue/verify, principal middleware.
+- `internal/broker`: RabbitMQ publishing and event payloads.
+- `internal/classifier`: deterministic rule-based classification.
+- `internal/config`: environment loading.
+- `internal/consumer`: classifier and label worker loops.
+- `internal/gmail`: Gmail OAuth, read, and label operations.
+- `internal/reader`: mock/Gmail reader abstraction.
+- `internal/rules`: rule model and matching concepts.
+- `internal/storage`: PostgreSQL persistence and row models.
+
+## External Console Integration
+
+`pg-ops-console` is intentionally separate. ETS issues JWTs and owns user semantics; POS validates those JWTs and applies only coarse console policy. POS should not create ETS users or define ETS role meaning.
+
+For local or deployed console login, POS can send a Telegram Login Widget payload to ETS `POST /auth/telegram`, store the returned project token in a session cookie, and use it as `Authorization: Bearer`.
+
+## Current Limitations
+
+- No first-party web UI in this repository.
+- No self-registration; users are database-provisioned.
+- No row-level policy in PostgreSQL; ownership checks are currently in API and console policy.
+- Classification is rule-based only; there is no LLM or ML classifier.
+- Observability is basic logs and stored counters.
+- Kubernetes deployment manifests live outside this repository.
+
+## Change Guidelines
+
+- Keep ETS as the owner of domain users and role semantics.
+- Keep POS integration project-JWT based; do not move Telegram bot token or user provisioning into POS.
+- Prefer database-managed rules over classifier hard-coding.
+- Preserve the privacy boundary: do not persist raw email body content.
+- When changing scan behavior, update API flow, worker flow, and status counters together.

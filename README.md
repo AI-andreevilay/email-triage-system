@@ -256,7 +256,7 @@ Unit tests do not require Gmail, PostgreSQL, or RabbitMQ.
 - The current label set is experimental.
 - `Unknown` is the fallback label when no rule matches.
 - `Transactions` may overlap with Gmail's built-in purchase/order categorization.
-- There is no UI or authentication layer.
+- There is no first-party UI; authentication is project-owned Telegram login with pre-provisioned users.
 - Kubernetes manifests are intentionally not included in this public repository.
 
 ## Documentation
