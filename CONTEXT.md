@@ -20,6 +20,10 @@ _Avoid_: Personal rule
 The person whose inbox is being triaged. In the current product scope, the Mailbox Owner and the administrator can be the same person.
 _Avoid_: Customer
 
+**User**:
+A Mailbox Owner who can sign in to Email Triage System. A User has a Telegram-linked identity and a role, and owns User-Specific Rules.
+_Avoid_: Auth user, account
+
 **Single-Owner Scope**:
 The current product scope where the system is operated for one Mailbox Owner. The language still distinguishes Global Rules from User-Specific Rules so the model can grow beyond one owner later.
 _Avoid_: Single-user SaaS
@@ -45,3 +49,7 @@ Domain expert: Not in the current scope. The Mailbox Owner can use the admin con
 Developer: Are User-Specific Rules still meaningful in Single-Owner Scope?
 
 Domain expert: Yes. They represent the Mailbox Owner's overrides above Global Rules.
+
+Developer: Can a User see Global Rules?
+
+Domain expert: Yes. A User can see Global Rules, but only an administrator can create or edit Global Rules.
