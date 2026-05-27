@@ -7,7 +7,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS user_rules_unique_rule
 
 INSERT INTO user_rules (user_id, rule_type, operator, rule_value, target_label, enabled, priority)
 VALUES
-    ('user_1', 'sender_email', 'equals', 'contact.center@permatabank.co.id', 'Transactions', TRUE, 260),
+    ('00000000-0000-0000-0000-000000000001', 'sender_email', 'equals', 'contact.center@permatabank.co.id', 'Transactions', TRUE, 260),
     (NULL, 'sender_domain', 'contains', 'google.com', 'Security', TRUE, 220),
     (NULL, 'subject', 'contains', 'sign-in', 'Security', TRUE, 210),
     (NULL, 'any', 'contains', 'verification code', 'Security', TRUE, 210),

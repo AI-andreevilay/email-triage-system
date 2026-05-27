@@ -54,7 +54,7 @@ WHERE user_id IS NULL
   );
 
 DELETE FROM user_rules
-WHERE user_id = 'user_1'
+WHERE user_id = '00000000-0000-0000-0000-000000000001'
   AND rule_type = 'sender_email'
   AND operator = 'equals'
   AND rule_value = 'contact.center@permatabank.co.id'
