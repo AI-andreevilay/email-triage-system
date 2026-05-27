@@ -10,6 +10,7 @@ import (
 
 var ErrEmailMessageNotFound = errors.New("email message not found")
 var ErrScanRunNotFound = errors.New("scan run not found")
+var ErrUserNotFound = errors.New("user not found")
 
 type Postgres struct {
 	db *sql.DB

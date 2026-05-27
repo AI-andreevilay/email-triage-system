@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/bzelijah/email-triage-system/internal/auth"
 	"github.com/bzelijah/email-triage-system/internal/broker"
 	"github.com/bzelijah/email-triage-system/internal/reader"
 	"github.com/bzelijah/email-triage-system/internal/storage"
@@ -19,7 +20,6 @@ import (
 const (
 	scanModeDryRun = "dry_run"
 	scanModeApply  = "apply"
-	defaultUserID  = "user_1"
 )
 
 type createScanRequest struct {
@@ -59,9 +59,12 @@ type statusCounts struct {
 	Applied    int `json:"applied"`
 }
 
-func (h *Handler) StartScheduledScans(ctx context.Context, interval time.Duration, mode, query string, markRead bool) error {
+func (h *Handler) StartScheduledScans(ctx context.Context, interval time.Duration, userID, mode, query string, markRead bool) error {
 	if interval <= 0 {
 		return nil
+	}
+	if userID == "" {
+		return errors.New("scheduled scan user id is required when scheduled scans are enabled")
 	}
 	if mode == "" {
 		mode = scanModeDryRun
@@ -78,7 +81,7 @@ func (h *Handler) StartScheduledScans(ctx context.Context, interval time.Duratio
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				if _, err := h.startScan(ctx, defaultUserID, mode, query, markRead); err != nil {
+				if _, err := h.startScan(ctx, userID, mode, query, markRead); err != nil {
 					log.Printf("failed to start scheduled scan mode=%s query=%q mark_read=%t error=%v", mode, query, markRead, err)
 				}
 			}
@@ -89,6 +92,12 @@ func (h *Handler) StartScheduledScans(ctx context.Context, interval time.Duratio
 }
 
 func (h *Handler) createScan(w http.ResponseWriter, r *http.Request) {
+	principal, ok := auth.PrincipalFromContext(r.Context())
+	if !ok {
+		writeJSONError(w, http.StatusUnauthorized, "missing principal")
+		return
+	}
+
 	var req createScanRequest
 	if r.Body != nil {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
@@ -106,7 +115,7 @@ func (h *Handler) createScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	runID, err := h.startScan(context.Background(), defaultUserID, mode, req.Query, req.MarkRead)
+	runID, err := h.startScan(context.Background(), principal.UserID, mode, req.Query, req.MarkRead)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "failed to create scan run")
 		return
@@ -115,7 +124,7 @@ func (h *Handler) createScan(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, createScanResponse{
 		Result:   "ok",
 		RunID:    runID,
-		UserID:   defaultUserID,
+		UserID:   principal.UserID,
 		Mode:     mode,
 		Status:   "enqueuing",
 		Query:    req.Query,
@@ -219,6 +228,12 @@ func (h *Handler) enqueueScan(ctx context.Context, runID int64, userID, mode, qu
 }
 
 func (h *Handler) getScan(w http.ResponseWriter, r *http.Request) {
+	principal, ok := auth.PrincipalFromContext(r.Context())
+	if !ok {
+		writeJSONError(w, http.StatusUnauthorized, "missing principal")
+		return
+	}
+
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil || id <= 0 {
 		writeJSONError(w, http.StatusBadRequest, "invalid scan id")
@@ -232,6 +247,10 @@ func (h *Handler) getScan(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSONError(w, http.StatusInternalServerError, "failed to get scan run")
+		return
+	}
+	if principal.Role != "admin" && run.UserID != principal.UserID {
+		writeJSONError(w, http.StatusForbidden, "scan run is not owned by current user")
 		return
 	}
 

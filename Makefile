@@ -61,12 +61,14 @@ healthz: ## call health endpoint
 .PHONY: scan-dry-run
 scan-dry-run: ## trigger scan in dry_run mode
 	curl -X POST http://localhost:8080/scans \
+		-H "Authorization: Bearer $(AUTH_TOKEN)" \
 		-H "Content-Type: application/json" \
 		-d '{"mode":"dry_run"}'
 
 .PHONY: scan-apply
 scan-apply: ## trigger scan in apply mode
 	curl -X POST http://localhost:8080/scans \
+		-H "Authorization: Bearer $(AUTH_TOKEN)" \
 		-H "Content-Type: application/json" \
 		-d '{"mode":"apply"}'
 

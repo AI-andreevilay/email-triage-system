@@ -29,6 +29,7 @@ For a single personal inbox, Gmail filters may be enough. This repository is bes
   - `Unknown`
 - PostgreSQL-backed User Rules.
 - Global Rules and User-Specific Rules.
+- Telegram login and project-issued Bearer JWTs.
 - Priority and specificity scoring.
 - Manual scan endpoint with `dry_run` and `apply` modes.
 - RabbitMQ event flow:
@@ -121,16 +122,41 @@ Check health:
 make healthz
 ```
 
+Create the first enabled user after migrations:
+
+```sql
+INSERT INTO users (id, telegram_id, telegram_username, display_name, role)
+VALUES ('00000000-0000-0000-0000-000000000001', 123456789, 'admin_user', 'Admin User', 'admin');
+```
+
+Auth config:
+
+```text
+JWT_SECRET=dev-change-me
+JWT_ISSUER=email-triage-system
+JWT_AUDIENCE=email-triage-system,pg-ops-console
+TELEGRAM_BOT_TOKEN=123456:bot-token
+AUTH_TOKEN_TTL=24h
+```
+
+Exchange a Telegram login payload for an access token:
+
+```bash
+curl -X POST http://localhost:8080/auth/telegram \
+  -H "Content-Type: application/json" \
+  -d '{"id":123456789,"username":"admin_user","first_name":"Admin","auth_date":1710000000,"hash":"telegram_hash"}'
+```
+
 Trigger a dry-run scan:
 
 ```bash
-make scan-dry-run
+AUTH_TOKEN="$TOKEN" make scan-dry-run
 ```
 
 The scan request returns after the scan run is accepted. Use the returned `run_id` to inspect enqueue progress:
 
 ```bash
-curl http://localhost:8080/scans/1
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/scans/1
 ```
 
 The response includes enqueue counters (`total_found`, `total_processed`, `total_failed`), downstream email status counters (`dry_run`, `classified`, `applied`), and a derived `processing_status`.
@@ -139,6 +165,7 @@ Override the configured Gmail query for one scan:
 
 ```bash
 curl -X POST http://localhost:8080/scans \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"mode":"dry_run","query":"-in:trash -in:spam"}'
 ```
@@ -147,6 +174,7 @@ Apply labels and mark matched messages read:
 
 ```bash
 curl -X POST http://localhost:8080/scans \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"mode":"apply","query":"in:inbox -in:trash newer_than:1d","mark_read":true}'
 ```
@@ -155,6 +183,7 @@ Recurring scans can be enabled inside the API process:
 
 ```text
 SCHEDULED_SCAN_INTERVAL=3h
+SCHEDULED_SCAN_USER_ID=00000000-0000-0000-0000-000000000001
 SCHEDULED_SCAN_MODE=apply
 SCHEDULED_SCAN_QUERY=in:inbox -in:trash newer_than:1d
 SCHEDULED_SCAN_MARK_READ=false

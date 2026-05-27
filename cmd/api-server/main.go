@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/bzelijah/email-triage-system/internal/api"
+	"github.com/bzelijah/email-triage-system/internal/auth"
 	"github.com/bzelijah/email-triage-system/internal/broker"
 	"github.com/bzelijah/email-triage-system/internal/config"
 	"github.com/bzelijah/email-triage-system/internal/gmail"
@@ -57,7 +58,13 @@ func main() {
 		log.Fatal(err)
 	}
 
-	handler, err := api.NewHandler(pg, emailReader, mq)
+	handler, err := api.NewHandler(pg, emailReader, mq, auth.Config{
+		JWTSecret:        cfg.JWTSecret,
+		JWTIssuer:        cfg.JWTIssuer,
+		JWTAudience:      cfg.JWTAudience,
+		TelegramBotToken: cfg.TelegramBotToken,
+		TokenTTL:         cfg.AuthTokenTTL,
+	})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -71,7 +78,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	if err := handler.StartScheduledScans(ctx, cfg.ScheduledScanInterval, cfg.ScheduledScanMode, cfg.ScheduledScanQuery, cfg.ScheduledScanMarkRead); err != nil {
+	if err := handler.StartScheduledScans(ctx, cfg.ScheduledScanInterval, cfg.ScheduledScanUserID, cfg.ScheduledScanMode, cfg.ScheduledScanQuery, cfg.ScheduledScanMarkRead); err != nil {
 		log.Fatal(err)
 	}
 
